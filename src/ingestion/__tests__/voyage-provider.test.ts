@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { embedDocuments, embedQuery } from '../embedder.js';
-import { resetProvider } from '../providers/index.js';
+import { VoyageProvider } from '../providers/voyage.js';
 
 function makeResponse(embeddings: number[][]): Response {
   return new Response(
@@ -11,16 +10,21 @@ function makeResponse(embeddings: number[][]): Response {
   );
 }
 
-describe('embedder', () => {
+describe('VoyageProvider', () => {
+  let provider: VoyageProvider;
+
   beforeEach(() => {
     process.env.VOYAGE_API_KEY = 'test-key';
-    resetProvider();
+    provider = new VoyageProvider();
   });
 
   afterEach(() => {
     delete process.env.VOYAGE_API_KEY;
     vi.restoreAllMocks();
-    resetProvider();
+  });
+
+  it('has dimension 1024', () => {
+    expect(provider.dimension).toBe(1024);
   });
 
   it('embedDocuments sends input_type "document" and returns vectors', async () => {
@@ -32,7 +36,7 @@ describe('embedder', () => {
     );
     vi.stubGlobal('fetch', mockFetch);
 
-    const results = await embedDocuments(['hello', 'world']);
+    const results = await provider.embedDocuments(['hello', 'world']);
 
     expect(mockFetch).toHaveBeenCalledOnce();
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -51,7 +55,7 @@ describe('embedder', () => {
       .mockResolvedValue(makeResponse([[0.7, 0.8, 0.9]]));
     vi.stubGlobal('fetch', mockFetch);
 
-    const result = await embedQuery('search term');
+    const result = await provider.embedQuery('search term');
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.input).toEqual(['search term']);
@@ -72,7 +76,7 @@ describe('embedder', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     const texts = Array.from({ length: 200 }, (_, i) => `text-${i}`);
-    const results = await embedDocuments(texts);
+    const results = await provider.embedDocuments(texts);
 
     expect(mockFetch.mock.calls.length).toBe(2);
 
@@ -88,7 +92,7 @@ describe('embedder', () => {
     const mockFetch = vi.fn();
     vi.stubGlobal('fetch', mockFetch);
 
-    const results = await embedDocuments([]);
+    const results = await provider.embedDocuments([]);
 
     expect(results).toEqual([]);
     expect(mockFetch).not.toHaveBeenCalled();
@@ -97,7 +101,7 @@ describe('embedder', () => {
   it('throws descriptive error when VOYAGE_API_KEY is missing', async () => {
     delete process.env.VOYAGE_API_KEY;
 
-    await expect(embedDocuments(['test'])).rejects.toThrow(
+    await expect(provider.embedDocuments(['test'])).rejects.toThrow(
       'VOYAGE_API_KEY environment variable is not set',
     );
   });
@@ -108,7 +112,7 @@ describe('embedder', () => {
       .mockResolvedValue(new Response('rate limit exceeded', { status: 429 }));
     vi.stubGlobal('fetch', mockFetch);
 
-    await expect(embedDocuments(['test'])).rejects.toThrow(
+    await expect(provider.embedDocuments(['test'])).rejects.toThrow(
       'Voyage API error (429)',
     );
   });
@@ -125,7 +129,7 @@ describe('embedder', () => {
     vi.stubGlobal('fetch', mockFetch);
 
     const texts = Array.from({ length: 200 }, (_, i) => `text-${i}`);
-    await expect(embedDocuments(texts)).rejects.toThrow(
+    await expect(provider.embedDocuments(texts)).rejects.toThrow(
       'Embedding failed on batch 2/2 (texts 128-199)',
     );
   });
@@ -134,7 +138,7 @@ describe('embedder', () => {
     const mockFetch = vi.fn().mockResolvedValue(makeResponse([[0.1, 0.2]]));
     vi.stubGlobal('fetch', mockFetch);
 
-    await expect(embedDocuments(['hello', 'world'])).rejects.toThrow(
+    await expect(provider.embedDocuments(['hello', 'world'])).rejects.toThrow(
       'expected 2 embeddings, got 1',
     );
   });
@@ -148,7 +152,7 @@ describe('embedder', () => {
     );
     vi.stubGlobal('fetch', mockFetch);
 
-    await expect(embedDocuments(['test'])).rejects.toThrow(
+    await expect(provider.embedDocuments(['test'])).rejects.toThrow(
       'invalid embedding at index 0',
     );
   });
@@ -162,7 +166,7 @@ describe('embedder', () => {
     );
     vi.stubGlobal('fetch', mockFetch);
 
-    await expect(embedQuery('test')).rejects.toThrow(
+    await expect(provider.embedQuery('test')).rejects.toThrow(
       'expected 1 embeddings, got 0',
     );
   });
@@ -179,11 +183,11 @@ describe('embedder', () => {
       .mockResolvedValueOnce(makeResponse([[0.5, 0.6]]));
     vi.stubGlobal('fetch', mockFetch);
 
-    const results = await embedDocuments(['a', 'b']);
+    const results = await provider.embedDocuments(['a', 'b']);
     expect(results[0]).toBeInstanceOf(Float32Array);
     expect(results[1]).toBeInstanceOf(Float32Array);
 
-    const queryResult = await embedQuery('q');
+    const queryResult = await provider.embedQuery('q');
     expect(queryResult).toBeInstanceOf(Float32Array);
   });
 });
