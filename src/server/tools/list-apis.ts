@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { getApis } from '../../db/queries.js';
+import { formatApiList } from '../format.js';
 
 export function registerListApis(server: McpServer, db: Database.Database) {
   server.registerTool(
@@ -12,18 +13,7 @@ export function registerListApis(server: McpServer, db: Database.Database) {
     },
     () => {
       const apis = getApis(db);
-
-      if (apis.length === 0) {
-        return { content: [{ type: 'text', text: 'No APIs indexed yet.' }] };
-      }
-
-      const lines = apis.map((api) => {
-        const version = api.version ? ` (v${api.version})` : '';
-        return `- **${api.name}**${version}`;
-      });
-      const text = `## Indexed APIs\n\n${lines.join('\n')}`;
-
-      return { content: [{ type: 'text', text }] };
+      return { content: [{ type: 'text', text: formatApiList(apis) }] };
     },
   );
 }

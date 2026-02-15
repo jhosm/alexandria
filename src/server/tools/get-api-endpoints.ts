@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 import { getApis, getChunksByApi } from '../../db/queries.js';
+import { formatEndpointList } from '../format.js';
 
 export function registerGetApiEndpoints(
   server: McpServer,
@@ -26,33 +27,8 @@ export function registerGetApiEndpoints(
       }
 
       const endpoints = getChunksByApi(db, api.id, 'endpoint');
+      const text = formatEndpointList(apiName, endpoints);
 
-      if (endpoints.length === 0) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `No endpoints found for "${apiName}".`,
-            },
-          ],
-        };
-      }
-
-      const lines = endpoints.map((chunk) => {
-        const meta = chunk.metadata as
-          | { method?: string; path?: string }
-          | undefined;
-        const method = meta?.method?.toUpperCase() ?? '';
-        const path = meta?.path ?? '';
-        // Title is e.g. "GET /pets - List all pets"
-        const summary = chunk.title;
-        if (method && path) {
-          return `- **${method}** \`${path}\` — ${summary}`;
-        }
-        return `- ${summary}`;
-      });
-
-      const text = `## ${apiName} Endpoints\n\n${lines.join('\n')}`;
       return { content: [{ type: 'text', text }] };
     },
   );
