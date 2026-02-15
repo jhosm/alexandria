@@ -120,7 +120,14 @@ export function deleteChunksByApi(db: Database.Database, apiId: string): void {
   txn();
 }
 
-const CHUNK_TYPES = new Set<string>(['overview', 'endpoint', 'schema', 'glossary', 'use-case', 'guide']);
+const CHUNK_TYPES = new Set<string>([
+  'overview',
+  'endpoint',
+  'schema',
+  'glossary',
+  'use-case',
+  'guide',
+]);
 
 function rowToChunk(r: Record<string, unknown>): Chunk {
   const type = r.type as string;
@@ -192,7 +199,11 @@ function sanitizeFtsQuery(query: string): string {
   const cleaned = query.replace(/['"*()\-:^~@{}]/g, ' ').trim();
   if (!cleaned) return '';
   // Quote each token so FTS5 treats them as literals, not boolean operators
-  return cleaned.split(/\s+/).filter(Boolean).map(t => `"${t}"`).join(' ');
+  return cleaned
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => `"${t}"`)
+    .join(' ');
 }
 
 interface FtsRow {

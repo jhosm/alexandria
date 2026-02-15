@@ -58,7 +58,9 @@ export function getDb(dbPath?: string): Database.Database {
   const path = dbPath ?? process.env.ALEXANDRIA_DB_PATH ?? './alexandria.db';
   if (_db) {
     if (_dbPath !== path) {
-      throw new Error(`Database already open at "${_dbPath}", cannot open "${path}". Call closeDb() first.`);
+      throw new Error(
+        `Database already open at "${_dbPath}", cannot open "${path}". Call closeDb() first.`,
+      );
     }
     return _db;
   }
