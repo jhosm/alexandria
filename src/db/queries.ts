@@ -1,10 +1,11 @@
 import type Database from 'better-sqlite3';
-import type {
-  Api,
-  Chunk,
-  ChunkType,
-  SearchOptions,
-  SearchResult,
+import {
+  CHUNK_TYPES,
+  type Api,
+  type Chunk,
+  type ChunkType,
+  type SearchOptions,
+  type SearchResult,
 } from '../shared/types.js';
 
 // --- APIs ---
@@ -120,18 +121,11 @@ export function deleteChunksByApi(db: Database.Database, apiId: string): void {
   txn();
 }
 
-const CHUNK_TYPES = new Set<string>([
-  'overview',
-  'endpoint',
-  'schema',
-  'glossary',
-  'use-case',
-  'guide',
-]);
+const CHUNK_TYPES_SET = new Set<string>(CHUNK_TYPES);
 
 function rowToChunk(r: Record<string, unknown>): Chunk {
   const type = r.type as string;
-  if (!CHUNK_TYPES.has(type)) {
+  if (!CHUNK_TYPES_SET.has(type)) {
     throw new Error(`Invalid chunk type "${type}" in chunk "${r.id}"`);
   }
 

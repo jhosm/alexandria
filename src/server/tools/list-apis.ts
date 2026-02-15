@@ -12,8 +12,16 @@ export function registerListApis(server: McpServer, db: Database.Database) {
         'List all indexed API documentation sources with their names and versions',
     },
     () => {
-      const apis = getApis(db);
-      return { content: [{ type: 'text', text: formatApiList(apis) }] };
+      try {
+        const apis = getApis(db);
+        return { content: [{ type: 'text', text: formatApiList(apis) }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: 'text', text: `Failed to list APIs: ${message}` }],
+          isError: true,
+        };
+      }
     },
   );
 }

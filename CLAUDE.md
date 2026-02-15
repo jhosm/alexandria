@@ -1,10 +1,10 @@
 # Alexandria
 
-API documentation search engine. Indexes OpenAPI specs and markdown docs into SQLite with hybrid search (vector + full-text), served via MCP over HTTP.
+API documentation search engine. Indexes OpenAPI specs and markdown docs into SQLite with hybrid search (vector + full-text), served via MCP over stdio.
 
 ## Tech Stack
 
-TypeScript, Node 18+, SQLite (better-sqlite3 + sqlite-vec + FTS5), Voyage AI (voyage-3-lite, 1024d), Express, MCP SDK, Vitest
+TypeScript, Node 18+, SQLite (better-sqlite3 + sqlite-vec + FTS5), Voyage AI (voyage-3-lite, 1024d), MCP SDK, Vitest
 
 ## Architecture
 
@@ -19,7 +19,7 @@ src/
     embedder.ts         — Voyage AI batch embedding (128/batch, document vs query inputType)
     index.ts            — CLI entry: parse → hash compare → embed changed → upsert → delete orphans
   server/
-    index.ts            — Express + MCP Streamable HTTP (stateless)
+    index.ts            — MCP server over stdio (StdioServerTransport)
     tools/              — list-apis, search-docs, get-api-endpoints
 apis.yml                — API registry (name, spec path, docs dir)
 alexandria.db           — SQLite database (gitignored)
@@ -30,7 +30,7 @@ alexandria.db           — SQLite database (gitignored)
 ```bash
 npm run build          # Compile TypeScript
 npm run dev            # Dev mode with watch
-npm run dev:server     # Start MCP server (default port 3000)
+npm run dev:server     # Start MCP server (stdio transport)
 npm test               # Run tests (Vitest)
 npm run ingest -- --api <name> --spec <path> --docs <dir>  # Index single API
 npm run ingest -- --all                                     # Index all from apis.yml
@@ -40,7 +40,6 @@ npm run ingest -- --all                                     # Index all from api
 
 ```bash
 VOYAGE_API_KEY=...         # Required for embedding
-ALEXANDRIA_PORT=3000       # MCP server port (optional, default 3000)
 ```
 
 ## Key Patterns
@@ -67,7 +66,7 @@ Phase 3 ─ ingestion-cli
            Wires parsers + embedder into CLI pipeline (needs Phases 1–2)
 
 Phase 4 ─ mcp-server
-           Express + MCP HTTP serving search tools (needs Phases 1–2; reads data from Phase 3)
+           MCP stdio server serving search tools (needs Phases 1–2; reads data from Phase 3)
 ```
 
 # General Guidelines
