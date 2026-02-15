@@ -148,7 +148,7 @@ describe('ingestApi', () => {
 
     expect(result.embedded).toBe(0);
     expect(result.skipped).toBe(1);
-    expect(embedDocuments).not.toHaveBeenCalled();
+    expect(embedDocuments).toHaveBeenCalledWith([]);
   });
 
   it('re-embeds only changed chunks', async () => {
@@ -330,7 +330,7 @@ describe('ingestion pipeline verification', () => {
     expect(r2.embedded).toBe(0);
     expect(r2.skipped).toBe(5);
     expect(r2.deleted).toBe(0);
-    expect(embedDocuments).not.toHaveBeenCalled();
+    expect(embedDocuments).toHaveBeenCalledWith([]);
     expect(getChunksByApi(db, apiId)).toHaveLength(5);
 
     // --- 5.3: Remove an endpoint, re-run, confirm orphan cleanup ---
@@ -355,7 +355,7 @@ describe('ingestion pipeline verification', () => {
     expect(r3.embedded).toBe(0);
     expect(r3.skipped).toBe(4);
     expect(r3.deleted).toBe(1);
-    expect(embedDocuments).not.toHaveBeenCalled();
+    expect(embedDocuments).toHaveBeenCalledWith([]);
 
     const finalChunks = getChunksByApi(db, apiId);
     expect(finalChunks).toHaveLength(4);

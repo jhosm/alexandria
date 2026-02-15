@@ -22,12 +22,22 @@ function apiId(name: string): string {
   return uuidV5(name, UUID_NAMESPACE);
 }
 
+export class CliError extends Error {
+  constructor(message: string) {
+    super(message);
+  }
+}
+
 interface IngestResult {
   api: string;
   total: number;
   embedded: number;
   skipped: number;
   deleted: number;
+}
+
+function formatResult(r: IngestResult): string {
+  return `  ${r.total} chunks: ${r.embedded} embedded, ${r.skipped} skipped, ${r.deleted} deleted`;
 }
 
 export async function ingestApi(
@@ -38,7 +48,7 @@ export async function ingestApi(
   const id = apiId(name);
   const db = getDb();
 
-  // 2.2: Parse spec + docs → collect all chunks
+  // Parse spec + docs → collect all chunks
   const chunks: Chunk[] = [];
   chunks.push(...(await parseOpenApiSpec(specPath, id)));
 
@@ -49,7 +59,7 @@ export async function ingestApi(
     }
   }
 
-  // 2.3: Incremental re-indexing — compare content hashes
+  // Incremental re-indexing — compare content hashes
   const existingChunks = getChunksByApi(db, id);
   const existingHashMap = new Map(
     existingChunks.map((c) => [c.id, c.contentHash]),
@@ -67,38 +77,29 @@ export async function ingestApi(
     }
   }
 
-  // 2.7: API registry upsert (must precede chunk upserts due to FK constraint)
+  // Batch embed changed chunks (before any DB writes for atomicity)
+  const embeddings = await embedDocuments(changedChunks.map((c) => c.content));
+
+  // Atomic write: API registry + chunk upserts + orphan cleanup
   const api: Api = {
     id,
     name,
     specPath: resolve(specPath),
     docsPath: docsPath ? resolve(docsPath) : undefined,
   };
-  upsertApi(db, api);
+  const currentIds = new Set(chunks.map((c) => c.id));
+  const orphans = existingChunks.filter((c) => !currentIds.has(c.id));
 
-  // 2.4: Batch embed changed chunks
-  let embeddings: Float32Array[] = [];
-  if (changedChunks.length > 0) {
-    embeddings = await embedDocuments(changedChunks.map((c) => c.content));
-  }
-
-  // 2.5: Transactional upsert of embedded chunks
-  const upsertAll = db.transaction(() => {
+  const writeAll = db.transaction(() => {
+    upsertApi(db, api);
     for (let i = 0; i < changedChunks.length; i++) {
       upsertChunk(db, changedChunks[i], embeddings[i]);
     }
-  });
-  upsertAll();
-
-  // 2.6: Orphan cleanup — delete chunks not in current parse results
-  const currentIds = new Set(chunks.map((c) => c.id));
-  const orphans = existingChunks.filter((c) => !currentIds.has(c.id));
-  const deleteOrphans = db.transaction(() => {
     for (const orphan of orphans) {
       deleteChunk(db, orphan.id);
     }
   });
-  deleteOrphans();
+  writeAll();
 
   return {
     api: name,
@@ -109,8 +110,6 @@ export async function ingestApi(
   };
 }
 
-program.name('ingest').description('Index API documentation into Alexandria');
-
 export interface CliOptions {
   api?: string;
   spec?: string;
@@ -119,58 +118,71 @@ export interface CliOptions {
 }
 
 export async function runCli(opts: CliOptions): Promise<void> {
-  if (opts.all) {
-    const registryPath = resolve('apis.yml');
-    if (!existsSync(registryPath)) {
-      console.error('Error: apis.yml not found');
-      process.exit(1);
-    }
-    const entries = loadRegistry(registryPath);
-    const results: IngestResult[] = [];
-    let failed = 0;
-    for (const entry of entries) {
-      console.log(`Ingesting ${entry.name}...`);
-      try {
-        const result = await ingestApi(entry.name, entry.spec, entry.docs);
-        results.push(result);
-        console.log(
-          `  ${result.total} chunks: ${result.embedded} embedded, ${result.skipped} skipped, ${result.deleted} deleted`,
-        );
-      } catch (error) {
-        failed++;
-        console.error(
-          `  Error ingesting ${entry.name}: ${error instanceof Error ? error.message : error}`,
-        );
+  try {
+    if (opts.all) {
+      const registryPath = resolve('apis.yml');
+      if (!existsSync(registryPath)) {
+        throw new CliError('apis.yml not found');
       }
+      const entries = loadRegistry(registryPath);
+      const results: IngestResult[] = [];
+      let failed = 0;
+      for (const entry of entries) {
+        console.log(`Ingesting ${entry.name}...`);
+        try {
+          const result = await ingestApi(entry.name, entry.spec, entry.docs);
+          results.push(result);
+          console.log(formatResult(result));
+        } catch (error) {
+          if (error instanceof TypeError || error instanceof RangeError)
+            throw error;
+          if (
+            error instanceof Error &&
+            /SQLITE_(CORRUPT|READONLY|FULL|IOERR)/.test(error.message)
+          )
+            throw error;
+
+          failed++;
+          const msg = error instanceof Error ? error.message : String(error);
+          console.error(`  Error ingesting ${entry.name}: ${msg}`);
+          if (error instanceof Error && error.stack) {
+            console.error(error.stack);
+          }
+        }
+      }
+
+      const totals = results.reduce(
+        (acc, r) => ({
+          total: acc.total + r.total,
+          embedded: acc.embedded + r.embedded,
+          skipped: acc.skipped + r.skipped,
+          deleted: acc.deleted + r.deleted,
+        }),
+        { total: 0, embedded: 0, skipped: 0, deleted: 0 },
+      );
+      const apiCount = `${results.length} API${results.length !== 1 ? 's' : ''} processed`;
+      const chunkSummary = `${totals.total} chunks (${totals.embedded} embedded, ${totals.skipped} skipped, ${totals.deleted} deleted)`;
+      const failSuffix = failed > 0 ? `, ${failed} failed` : '';
+      console.log(`\nDone. ${apiCount}, ${chunkSummary}${failSuffix}`);
+
+      if (failed > 0) {
+        process.exitCode = 1;
+      }
+    } else if (opts.api && opts.spec) {
+      console.log(`Ingesting ${opts.api}...`);
+      const result = await ingestApi(opts.api, opts.spec, opts.docs);
+      console.log(formatResult(result));
+    } else {
+      throw new CliError('provide --api and --spec, or --all');
     }
-
-    const totals = results.reduce(
-      (acc, r) => ({
-        total: acc.total + r.total,
-        embedded: acc.embedded + r.embedded,
-        skipped: acc.skipped + r.skipped,
-        deleted: acc.deleted + r.deleted,
-      }),
-      { total: 0, embedded: 0, skipped: 0, deleted: 0 },
-    );
-    console.log(
-      `\nDone. ${results.length} API${results.length !== 1 ? 's' : ''} processed, ${totals.total} chunks (${totals.embedded} embedded, ${totals.skipped} skipped, ${totals.deleted} deleted)${failed > 0 ? `, ${failed} failed` : ''}`,
-    );
-  } else if (opts.api && opts.spec) {
-    console.log(`Ingesting ${opts.api}...`);
-    const result = await ingestApi(opts.api, opts.spec, opts.docs);
-    console.log(
-      `  ${result.total} chunks: ${result.embedded} embedded, ${result.skipped} skipped, ${result.deleted} deleted`,
-    );
-  } else {
-    console.error('Error: provide --api and --spec, or --all');
-    process.exit(1);
+  } finally {
+    closeDb();
   }
-
-  closeDb();
 }
 
 program
+  .name('ingest')
+  .description('Index API documentation into Alexandria')
   .option('--api <name>', 'API name')
   .option('--spec <path>', 'Path to OpenAPI spec file')
   .option('--docs <dir>', 'Path to markdown docs directory')
@@ -181,5 +193,12 @@ const isMain =
   process.argv[1] &&
   resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  program.parse();
+  program.parseAsync().catch((err) => {
+    if (err instanceof CliError) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+    console.error(err);
+    process.exit(1);
+  });
 }

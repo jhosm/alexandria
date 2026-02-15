@@ -77,7 +77,7 @@ describe('ingest CLI', () => {
       // Summary still printed
       expect(combined).toMatch(/Done\. 0 APIs processed/);
       expect(combined).toMatch(/2 failed/);
-      expect(code).toBe(0);
+      expect(code).toBe(1);
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
