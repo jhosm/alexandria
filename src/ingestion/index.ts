@@ -111,69 +111,71 @@ export async function ingestApi(
 
 program.name('ingest').description('Index API documentation into Alexandria');
 
+export interface CliOptions {
+  api?: string;
+  spec?: string;
+  docs?: string;
+  all?: boolean;
+}
+
+export async function runCli(opts: CliOptions): Promise<void> {
+  if (opts.all) {
+    const registryPath = resolve('apis.yml');
+    if (!existsSync(registryPath)) {
+      console.error('Error: apis.yml not found');
+      process.exit(1);
+    }
+    const entries = loadRegistry(registryPath);
+    const results: IngestResult[] = [];
+    let failed = 0;
+    for (const entry of entries) {
+      console.log(`Ingesting ${entry.name}...`);
+      try {
+        const result = await ingestApi(entry.name, entry.spec, entry.docs);
+        results.push(result);
+        console.log(
+          `  ${result.total} chunks: ${result.embedded} embedded, ${result.skipped} skipped, ${result.deleted} deleted`,
+        );
+      } catch (error) {
+        failed++;
+        console.error(
+          `  Error ingesting ${entry.name}: ${error instanceof Error ? error.message : error}`,
+        );
+      }
+    }
+
+    const totals = results.reduce(
+      (acc, r) => ({
+        total: acc.total + r.total,
+        embedded: acc.embedded + r.embedded,
+        skipped: acc.skipped + r.skipped,
+        deleted: acc.deleted + r.deleted,
+      }),
+      { total: 0, embedded: 0, skipped: 0, deleted: 0 },
+    );
+    console.log(
+      `\nDone. ${results.length} API${results.length !== 1 ? 's' : ''} processed, ${totals.total} chunks (${totals.embedded} embedded, ${totals.skipped} skipped, ${totals.deleted} deleted)${failed > 0 ? `, ${failed} failed` : ''}`,
+    );
+  } else if (opts.api && opts.spec) {
+    console.log(`Ingesting ${opts.api}...`);
+    const result = await ingestApi(opts.api, opts.spec, opts.docs);
+    console.log(
+      `  ${result.total} chunks: ${result.embedded} embedded, ${result.skipped} skipped, ${result.deleted} deleted`,
+    );
+  } else {
+    console.error('Error: provide --api and --spec, or --all');
+    process.exit(1);
+  }
+
+  closeDb();
+}
+
 program
   .option('--api <name>', 'API name')
   .option('--spec <path>', 'Path to OpenAPI spec file')
   .option('--docs <dir>', 'Path to markdown docs directory')
   .option('--all', 'Ingest all APIs from apis.yml')
-  .action(
-    async (opts: {
-      api?: string;
-      spec?: string;
-      docs?: string;
-      all?: boolean;
-    }) => {
-      if (opts.all) {
-        const registryPath = resolve('apis.yml');
-        if (!existsSync(registryPath)) {
-          console.error('Error: apis.yml not found');
-          process.exit(1);
-        }
-        const entries = loadRegistry(registryPath);
-        const results: IngestResult[] = [];
-        let failed = 0;
-        for (const entry of entries) {
-          console.log(`Ingesting ${entry.name}...`);
-          try {
-            const result = await ingestApi(entry.name, entry.spec, entry.docs);
-            results.push(result);
-            console.log(
-              `  ${result.total} chunks: ${result.embedded} embedded, ${result.skipped} skipped, ${result.deleted} deleted`,
-            );
-          } catch (error) {
-            failed++;
-            console.error(
-              `  Error ingesting ${entry.name}: ${error instanceof Error ? error.message : error}`,
-            );
-          }
-        }
-
-        const totals = results.reduce(
-          (acc, r) => ({
-            total: acc.total + r.total,
-            embedded: acc.embedded + r.embedded,
-            skipped: acc.skipped + r.skipped,
-            deleted: acc.deleted + r.deleted,
-          }),
-          { total: 0, embedded: 0, skipped: 0, deleted: 0 },
-        );
-        console.log(
-          `\nDone. ${results.length} API${results.length !== 1 ? 's' : ''} processed, ${totals.total} chunks (${totals.embedded} embedded, ${totals.skipped} skipped, ${totals.deleted} deleted)${failed > 0 ? `, ${failed} failed` : ''}`,
-        );
-      } else if (opts.api && opts.spec) {
-        console.log(`Ingesting ${opts.api}...`);
-        const result = await ingestApi(opts.api, opts.spec, opts.docs);
-        console.log(
-          `  ${result.total} chunks: ${result.embedded} embedded, ${result.skipped} skipped, ${result.deleted} deleted`,
-        );
-      } else {
-        console.error('Error: provide --api and --spec, or --all');
-        process.exit(1);
-      }
-
-      closeDb();
-    },
-  );
+  .action(runCli);
 
 const isMain =
   process.argv[1] &&
