@@ -4,25 +4,35 @@ API documentation search engine. Indexes OpenAPI specs and markdown docs into SQ
 
 ## Tech Stack
 
-TypeScript, Node 18+, SQLite (better-sqlite3 + sqlite-vec + FTS5), Voyage AI (voyage-3-lite, 1024d), MCP SDK, Vitest
+TypeScript, Node 18+, SQLite (better-sqlite3 + sqlite-vec + FTS5), MCP SDK, Vitest, ESLint, Prettier
+
+Embedding providers (pluggable via `EMBEDDING_PROVIDER`): Voyage AI, Ollama, Hugging Face Transformers
 
 ## Architecture
 
 ```
 src/
-  shared/types.ts       — Chunk, SearchResult, Api, SearchOptions types
-  db/index.ts           — SQLite init, schema creation, connection (WAL mode)
-  db/queries.ts         — CRUD + hybrid search (RRF, k=60) across chunks/FTS/vec tables
+  shared/types.ts          — Chunk, SearchResult, Api, SearchOptions types
+  db/index.ts              — SQLite init, schema creation, connection (WAL mode)
+  db/queries.ts            — CRUD + hybrid search (RRF, k=60) across chunks/FTS/vec tables
   ingestion/
-    openapi-parser.ts   — OpenAPI 3.x → overview/endpoint/schema chunks
-    markdown-parser.ts  — Markdown → glossary/use-case/guide chunks (AST-based, heading split)
-    embedder.ts         — Voyage AI batch embedding (128/batch, document vs query inputType)
-    index.ts            — CLI entry: parse → hash compare → embed changed → upsert → delete orphans
+    openapi-parser.ts      — OpenAPI 3.x → overview/endpoint/schema chunks
+    markdown-parser.ts     — Markdown → glossary/use-case/guide chunks (AST-based, heading split)
+    embedder.ts            — Thin facade delegating to active embedding provider
+    registry.ts            — YAML registry loader (apis.yml → ApiEntry[])
+    index.ts               — CLI entry: parse → hash compare → embed changed → upsert → delete orphans
+    providers/
+      types.ts             — EmbeddingProvider interface (dimension, embedDocuments, embedQuery)
+      index.ts             — Provider singleton factory (reads EMBEDDING_PROVIDER env var)
+      voyage.ts            — Voyage AI provider (voyage-3-lite, 1024d, 128/batch)
+      ollama.ts            — Ollama provider (nomic-embed-text, 768d)
+      transformers.ts      — HF Transformers provider (all-MiniLM-L6-v2, 384d, local)
   server/
-    index.ts            — MCP server over stdio (StdioServerTransport)
-    tools/              — list-apis, search-docs, get-api-endpoints
-apis.yml                — API registry (name, spec path, docs dir)
-alexandria.db           — SQLite database (gitignored)
+    index.ts               — MCP server over stdio (StdioServerTransport)
+    format.ts              — Response formatters (API list, search results, endpoints)
+    tools/                 — list-apis, search-docs, get-api-endpoints
+apis.yml                   — API registry (name, spec path, docs dir)
+alexandria.db              — SQLite database (gitignored)
 ```
 
 ## Commands
@@ -32,14 +42,32 @@ npm run build          # Compile TypeScript
 npm run dev            # Dev mode with watch
 npm run dev:server     # Start MCP server (stdio transport)
 npm test               # Run tests (Vitest)
+npm run test:watch     # Run tests in watch mode
+npm run lint           # ESLint
+npm run format         # Prettier (write)
+npm run format:check   # Prettier (check only)
 npm run ingest -- --api <name> --spec <path> --docs <dir>  # Index single API
 npm run ingest -- --all                                     # Index all from apis.yml
 ```
 
+Pre-commit hook (`.githooks/pre-commit`) runs lint + typecheck + tests automatically.
+
 ## Environment
 
 ```bash
-VOYAGE_API_KEY=...         # Required for embedding
+EMBEDDING_PROVIDER=voyage          # voyage (default) | ollama | transformers
+
+# Voyage AI (when EMBEDDING_PROVIDER=voyage)
+VOYAGE_API_KEY=...                 # Required
+
+# Ollama (when EMBEDDING_PROVIDER=ollama)
+OLLAMA_URL=http://localhost:11434  # Optional, default shown
+OLLAMA_MODEL=nomic-embed-text     # Optional, default shown
+OLLAMA_DIMENSION=768               # Optional, default shown
+
+# Transformers (when EMBEDDING_PROVIDER=transformers)
+TRANSFORMERS_MODEL=Xenova/all-MiniLM-L6-v2  # Optional, default shown
+TRANSFORMERS_DIMENSION=384                    # Optional, default shown
 ```
 
 ## Key Patterns
@@ -48,25 +76,21 @@ VOYAGE_API_KEY=...         # Required for embedding
 - **Incremental ingestion**: Content hashing skips unchanged chunks; orphan cleanup removes deleted ones
 - **Deterministic IDs**: Text UUIDs from API name + chunk identity enable idempotent upserts
 - **Three-table sync**: chunks, chunks_fts, chunks_vec always updated in same transaction
+- **Pluggable embedders**: Provider interface behind singleton factory; dimension is provider-driven and flows into schema
 
 ## Implementation Roadmap
 
-Each step maps to an OpenSpec change in `openspec/changes/`. Designs and tasks live there.
+Each step maps to an OpenSpec change in `openspec/changes/`. Completed changes are in `archive/`.
 
 ```
-Phase 1 ─ project-foundation
-           Scaffold, SQLite schema, shared types, hybrid search queries
-           └── Unblocks everything below
-
-Phase 2 ─ openapi-parser ─┐
-           markdown-parser ─┼── Can be built in parallel (only need Phase 1)
-           voyage-embedder ─┘
-
-Phase 3 ─ ingestion-cli
-           Wires parsers + embedder into CLI pipeline (needs Phases 1–2)
-
-Phase 4 ─ mcp-server
-           MCP stdio server serving search tools (needs Phases 1–2; reads data from Phase 3)
+✅ project-foundation    — Scaffold, SQLite schema, shared types, hybrid search
+✅ openapi-parser        — OpenAPI 3.x → chunks
+✅ markdown-parser       — Markdown → chunks
+✅ voyage-embedder       — Voyage AI provider
+✅ ingestion-cli         — CLI pipeline wiring parsers + embedder
+✅ embedding-providers   — Pluggable provider system (voyage, ollama, transformers)
+🔧 mcp-server           — MCP stdio server serving search tools (in progress)
+🔧 developer-onboarding — Onboarding docs/guides (in progress)
 ```
 
 # General Guidelines
