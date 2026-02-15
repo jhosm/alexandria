@@ -8,8 +8,12 @@
     "dev": "tsx --watch src/server/index.ts",
     "dev:server": "tsx src/server/index.ts",
     "ingest": "tsx src/ingestion/index.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint src/",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "dependencies": {
     "@apidevtools/swagger-parser": "^10.1.1",
@@ -29,8 +33,12 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.13.4",
     "@types/uuid": "^10.0.0",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1",
     "tsx": "^4.19.3",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.55.0",
     "vitest": "^3.0.5"
   }
 }

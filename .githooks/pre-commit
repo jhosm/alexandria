@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "==> Running lint..."
+npm run lint
+
+echo "==> Running type check..."
+npx tsc --noEmit
+
+echo "==> Running tests..."
+npm test
