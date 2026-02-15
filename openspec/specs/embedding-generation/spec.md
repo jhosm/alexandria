@@ -1,41 +1,41 @@
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Batch document embedding
 
-The system SHALL provide an `embedDocuments(texts: string[])` function that sends texts to the Voyage AI API with `input_type: "document"` and `model: "voyage-3-lite"`, returning an array of 1024-dimension number arrays. It SHALL batch texts into groups of 128 per API request.
+The system SHALL provide an `embedDocuments(texts: string[])` function that delegates to the configured `EmbeddingProvider` instance, returning an array of Float32Array vectors. It SHALL preserve batching behavior where the provider supports it.
 
 #### Scenario: Embed a batch of document texts
 
 - **WHEN** `embedDocuments` is called with 10 texts
-- **THEN** it SHALL make one API call to Voyage with `input_type: "document"` and return 10 embedding arrays each of length 1024
-
-#### Scenario: Batch splitting for large input
-
-- **WHEN** `embedDocuments` is called with 200 texts
-- **THEN** it SHALL make 2 API calls (128 + 72 texts) and return 200 embedding arrays
+- **THEN** it SHALL delegate to the active provider's `embedDocuments` method and return 10 Float32Array embeddings
 
 #### Scenario: Empty input
 
 - **WHEN** `embedDocuments` is called with an empty array
-- **THEN** it SHALL return an empty array without making any API calls
+- **THEN** it SHALL return an empty array without calling the provider
 
 ### Requirement: Single query embedding
 
-The system SHALL provide an `embedQuery(text: string)` function that sends a single text to the Voyage AI API with `input_type: "query"` and `model: "voyage-3-lite"`, returning a single 1024-dimension number array.
+The system SHALL provide an `embedQuery(text: string)` function that delegates to the configured `EmbeddingProvider` instance, returning a single Float32Array vector.
 
 #### Scenario: Embed a search query
 
 - **WHEN** `embedQuery` is called with "how to authenticate users"
-- **THEN** it SHALL make one API call with `input_type: "query"` and return a single embedding array of length 1024
+- **THEN** it SHALL delegate to the active provider's `embedQuery` method and return a single Float32Array
 
 ### Requirement: API key configuration
 
-The embedder SHALL read the Voyage API key from the `VOYAGE_API_KEY` environment variable. If the variable is not set, functions SHALL throw an error with a descriptive message.
+The Voyage provider SHALL read the Voyage API key from the `VOYAGE_API_KEY` environment variable. If the variable is not set and the Voyage provider is active, functions SHALL throw an error with a descriptive message. Other providers SHALL NOT require `VOYAGE_API_KEY`.
 
-#### Scenario: Missing API key
+#### Scenario: Missing API key with Voyage provider
 
-- **WHEN** `embedDocuments` or `embedQuery` is called without `VOYAGE_API_KEY` set
+- **WHEN** `embedDocuments` or `embedQuery` is called with the Voyage provider active and `VOYAGE_API_KEY` not set
 - **THEN** it SHALL throw an error indicating the API key is missing
+
+#### Scenario: Missing API key with non-Voyage provider
+
+- **WHEN** `embedDocuments` is called with the Ollama or Transformers.js provider active and `VOYAGE_API_KEY` not set
+- **THEN** it SHALL succeed without requiring a Voyage API key
 
 ### Requirement: API error handling
 
