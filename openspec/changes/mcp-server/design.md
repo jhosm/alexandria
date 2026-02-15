@@ -1,38 +1,36 @@
 ## Context
 
-Alexandria's MCP server is the primary interface for LLMs to access indexed API documentation. It sits on top of the database layer and embedder, exposing three tools via the Model Context Protocol over HTTP. The server is stateless — each request is independent, with no session state to manage.
+Alexandria's MCP server is the primary interface for LLMs to access indexed API documentation. It sits on top of the database layer and embedder, exposing three tools via the Model Context Protocol over stdio. MCP clients (Claude Desktop, IDEs) launch the server as a child process and communicate via stdin/stdout.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Serve MCP tools over Streamable HTTP transport using Express
+- Serve MCP tools over stdio transport (stdin/stdout)
 - Provide three tools: `list-apis`, `search-docs`, `get-api-endpoints`
 - Format results as markdown optimized for LLM consumption
-- Include a health check endpoint for monitoring
 
 **Non-Goals:**
-- Authentication/authorization (MVP assumes trusted network)
-- Rate limiting (handled at infrastructure level if needed)
-- WebSocket or SSE transport (Streamable HTTP is sufficient)
+- HTTP transport (stdio is simpler and sufficient for local/single-client usage)
+- Authentication/authorization (stdio is inherently local)
 - Caching layer (SQLite reads are fast enough for MVP volumes)
 
 ## Decisions
 
-### D1: Express + MCP Streamable HTTP transport
+### D1: Stdio transport
 
-**Choice**: Use Express as the HTTP framework with `@modelcontextprotocol/sdk`'s `StreamableHTTPServerTransport` for MCP protocol handling.
+**Choice**: Use `@modelcontextprotocol/sdk`'s `StdioServerTransport` for MCP protocol handling over stdin/stdout.
 
 **Alternatives considered**:
-- stdio transport: Only works for local single-client usage. HTTP enables org-wide access.
-- Raw HTTP without Express: MCP SDK's transport works well with Express middleware. No reason to go lower-level.
+- Streamable HTTP via Express: Adds Express dependency, port management, and network concerns. Overkill for local single-client usage.
+- SSE transport: Deprecated in MCP spec in favor of Streamable HTTP. Not needed for stdio.
 
-**Rationale**: Express is familiar, lightweight, and the MCP SDK provides a ready-made Streamable HTTP transport that plugs into Express routes. Stateless transport means no session management overhead.
+**Rationale**: Stdio is the standard MCP transport for local servers. The client spawns the process and communicates directly — no network stack, no port conflicts, no deployment complexity. If HTTP is needed later, it can be added as a separate entry point.
 
 ### D2: Three focused tools over a single general-purpose tool
 
 **Choice**: Three separate tools with clear, single-purpose interfaces:
 - `list-apis`: No parameters, returns all indexed APIs
-- `search-docs`: Takes query string + optional apiId + optional types filter
+- `search-docs`: Takes query string + optional apiName + optional types filter
 - `get-api-endpoints`: Takes apiName, returns all endpoint chunks for that API
 
 **Alternatives considered**:
@@ -46,14 +44,8 @@ Alexandria's MCP server is the primary interface for LLMs to access indexed API 
 
 **Rationale**: LLMs consume markdown naturally. Structured markdown (headers, lists, code blocks) gives the model clear context without requiring JSON parsing. This is how LLMs prefer to receive reference material.
 
-### D4: Stateless transport
-
-**Choice**: Use stateless Streamable HTTP (no session IDs, no server-side state).
-
-**Rationale**: Alexandria's tools are all read-only queries. There's no conversation state to maintain between calls. Stateless is simpler to deploy and scale.
-
 ## Risks / Trade-offs
 
-- **No auth** → Anyone with network access can query the server. Mitigation: MVP assumes deployment on trusted internal network. Auth can be added via Express middleware later.
+- **Single client** → Stdio supports one connected client at a time. Mitigation: This is the standard MCP model. Multiple clients each spawn their own server process.
 - **Embedding at query time** → `search-docs` needs to embed the query string via Voyage AI on each call, adding latency (~100-200ms). Mitigation: Acceptable for interactive use. Could add embedding cache later if needed.
 - **No pagination** → Tools return all matching results up to the limit. Mitigation: Default limit of 20 is reasonable for LLM consumption. LLMs typically need a focused set of results, not pages.

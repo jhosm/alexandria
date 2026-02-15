@@ -1,27 +1,13 @@
 ## ADDED Requirements
 
-### Requirement: MCP server over Streamable HTTP
+### Requirement: MCP server over stdio
 
-The system SHALL provide an Express-based HTTP server that handles MCP protocol requests via `StreamableHTTPServerTransport` from `@modelcontextprotocol/sdk`. The server SHALL be stateless (no session management). It SHALL listen on the port specified by `ALEXANDRIA_PORT` environment variable (default 3000).
+The system SHALL provide an MCP server that communicates via `StdioServerTransport` from `@modelcontextprotocol/sdk`, reading JSON-RPC messages from stdin and writing responses to stdout. The server SHALL initialize the database connection on startup.
 
 #### Scenario: Server starts and accepts MCP requests
 
-- **WHEN** the server is started
-- **THEN** it SHALL listen on the configured port and accept MCP Streamable HTTP requests at the `/mcp` endpoint
-
-#### Scenario: Default port
-
-- **WHEN** `ALEXANDRIA_PORT` is not set
-- **THEN** the server SHALL listen on port 3000
-
-### Requirement: Health check endpoint
-
-The server SHALL expose a `GET /health` endpoint that returns HTTP 200 with a JSON body indicating the server is running.
-
-#### Scenario: Health check response
-
-- **WHEN** `GET /health` is requested
-- **THEN** the server SHALL respond with HTTP 200 and `{ "status": "ok" }`
+- **WHEN** the server process is started by an MCP client
+- **THEN** it SHALL connect stdio transport and accept MCP requests via stdin/stdout
 
 ### Requirement: list-apis tool
 
