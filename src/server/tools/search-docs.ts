@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getApis, searchHybrid } from '../../db/queries.js';
 import { embedQuery } from '../../ingestion/embedder.js';
 import type { ChunkType, SearchOptions } from '../../shared/types.js';
+import { formatSearchResults } from '../format.js';
 
 const VALID_TYPES: ChunkType[] = [
   'overview',
@@ -55,27 +56,10 @@ export function registerSearchDocs(server: McpServer, db: Database.Database) {
       const queryEmbedding = await embedQuery(query);
       const results = searchHybrid(db, query, queryEmbedding, options);
 
-      if (results.length === 0) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: 'No results found for your query.',
-            },
-          ],
-        };
-      }
-
-      // Build API id→name lookup for display
       const apis = getApis(db);
       const apiNames = new Map(apis.map((a) => [a.id, a.name]));
+      const text = formatSearchResults(results, apiNames);
 
-      const sections = results.map((r) => {
-        const source = apiNames.get(r.chunk.apiId) ?? r.chunk.apiId;
-        return `### ${r.chunk.title}\n\`${r.chunk.type}\` · ${source}\n\n${r.chunk.content}`;
-      });
-
-      const text = `## Search Results\n\n${sections.join('\n\n---\n\n')}`;
       return { content: [{ type: 'text', text }] };
     },
   );
