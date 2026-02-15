@@ -2,14 +2,28 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
-        "command": "case \"$TOOL_INPUT_file_path\" in *.env|*.env.*|*.db) echo 'BLOCKED: refusing to edit sensitive file (.env or .db)' && exit 1;; esac"
+        "matcher": {
+          "tools": ["Edit", "Write"]
+        },
+        "hooks": [
+          {
+            "type": "command",
+            "command": "case \"$TOOL_INPUT_file_path\" in *.env|*.env.*|*.db) echo 'BLOCKED: refusing to edit sensitive file (.env or .db)' && exit 1;; esac"
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write",
-        "command": "npx prettier --write \"$TOOL_INPUT_file_path\" 2>/dev/null || true"
+        "matcher": {
+          "tools": ["Edit", "Write"]
+        },
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx prettier --write \"$TOOL_INPUT_file_path\" 2>/dev/null || true"
+          }
+        ]
       }
     ]
   }
