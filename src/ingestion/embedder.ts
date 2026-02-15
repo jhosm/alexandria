@@ -1,5 +1,9 @@
 import { getProvider } from './providers/index.js';
 
+export function getDimension(): number {
+  return getProvider().dimension;
+}
+
 export async function embedDocuments(texts: string[]): Promise<Float32Array[]> {
   return getProvider().embedDocuments(texts);
 }

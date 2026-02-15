@@ -14,6 +14,7 @@ vi.mock('../markdown-parser.js', () => ({
 }));
 vi.mock('../embedder.js', () => ({
   embedDocuments: vi.fn(),
+  getDimension: vi.fn().mockReturnValue(1024),
 }));
 vi.mock('../../db/index.js', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../db/index.js')>();

@@ -41,6 +41,10 @@ const FTS_SCHEMA = `
 `;
 
 function initDb(db: Database.Database, dimension: number = 1024): void {
+  if (!Number.isInteger(dimension) || dimension < 1) {
+    throw new Error(`Invalid embedding dimension: ${dimension}`);
+  }
+
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   sqliteVec.load(db);
@@ -62,14 +66,14 @@ function initDb(db: Database.Database, dimension: number = 1024): void {
     db.prepare(
       "INSERT INTO config (key, value) VALUES ('embedding_dimension', ?)",
     ).run(String(dimension));
-    const vecSql = `
-      CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(
-        chunk_id text,
-        embedding float[${dimension}]
-      );
-    `;
-    db.exec(vecSql);
   }
+
+  db.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(
+      chunk_id text,
+      embedding float[${dimension}]
+    );
+  `);
 }
 
 let _db: Database.Database | null = null;
@@ -82,6 +86,16 @@ export function getDb(dbPath?: string, dimension?: number): Database.Database {
       throw new Error(
         `Database already open at "${_dbPath}", cannot open "${path}". Call closeDb() first.`,
       );
+    }
+    if (dimension !== undefined) {
+      const stored = _db
+        .prepare("SELECT value FROM config WHERE key = 'embedding_dimension'")
+        .get() as { value: string } | undefined;
+      if (stored && Number(stored.value) !== dimension) {
+        throw new Error(
+          `Embedding dimension mismatch: database has ${stored.value}d vectors but provider requires ${dimension}d. Re-index with: npm run ingest -- --all`,
+        );
+      }
     }
     return _db;
   }
