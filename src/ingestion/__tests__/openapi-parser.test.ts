@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { resolve } from 'node:path';
+import { writeFile, unlink } from 'node:fs/promises';
 import { parseOpenApiSpec } from '../openapi-parser.js';
 
 const FIXTURE_PATH = resolve(import.meta.dirname, 'fixtures/sample-openapi.yaml');
@@ -91,6 +92,24 @@ describe('parseOpenApiSpec', () => {
     const schemas = chunks.filter(c => c.type === 'schema');
     for (const sc of schemas) {
       expect(sc.id).toBe(`petstore:schema:${sc.metadata?.schemaName}`);
+    }
+  });
+
+  it('throws with context when spec file does not exist', async () => {
+    await expect(parseOpenApiSpec('/nonexistent.yaml', 'test-api')).rejects.toThrow(
+      'Failed to parse OpenAPI spec for "test-api" at /nonexistent.yaml',
+    );
+  });
+
+  it('rejects Swagger 2.0 specs with clear error', async () => {
+    const swagger2Path = resolve(import.meta.dirname, 'fixtures/swagger2-temp.yaml');
+    await writeFile(swagger2Path, 'swagger: "2.0"\ninfo:\n  title: Old\n  version: "1.0"\npaths: {}');
+    try {
+      await expect(parseOpenApiSpec(swagger2Path, 'old-api')).rejects.toThrow(
+        'not OpenAPI 3.x',
+      );
+    } finally {
+      await unlink(swagger2Path);
     }
   });
 

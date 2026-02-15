@@ -78,7 +78,14 @@ function splitAtParagraphBoundaries(content: string): string[] {
 }
 
 export async function parseMarkdownFile(filePath: string, apiId: string): Promise<Chunk[]> {
-  const source = await readFile(filePath, 'utf-8');
+  let source: string;
+  try {
+    source = await readFile(filePath, 'utf-8');
+  } catch (error) {
+    throw new Error(
+      `Failed to read markdown file for "${apiId}" at ${filePath}: ${error instanceof Error ? error.message : error}`,
+    );
+  }
   const tree = unified().use(remarkParse).parse(source);
   const chunkType = detectChunkType(filePath);
   const filename = basename(filePath, '.md');
@@ -104,29 +111,39 @@ export async function parseMarkdownFile(filePath: string, apiId: string): Promis
 
       if (depth === 1) {
         h1Title = text;
+        // Start a section for h1 body content (intro text before first h2)
+        currentSection = {
+          headings: [text],
+          contentStart: node.position.end.offset,
+          contentEnd: node.position.end.offset,
+        };
         continue;
       }
 
-      // Finalize previous section at the start of this heading
-      finalizeSection(node.position.start.offset);
+      if (depth <= 3) {
+        // Finalize previous section at the start of this heading
+        finalizeSection(node.position.start.offset);
 
-      if (depth === 2) {
-        currentH2 = text;
-        currentSection = {
-          headings: h1Title ? [h1Title, text] : [text],
-          contentStart: node.position.end.offset,
-          contentEnd: node.position.end.offset,
-        };
-      } else if (depth === 3) {
-        const headings = h1Title
-          ? [h1Title, ...(currentH2 ? [currentH2] : []), text]
-          : [...(currentH2 ? [currentH2] : []), text];
-        currentSection = {
-          headings,
-          contentStart: node.position.end.offset,
-          contentEnd: node.position.end.offset,
-        };
+        if (depth === 2) {
+          currentH2 = text;
+          currentSection = {
+            headings: [...(h1Title ? [h1Title] : []), text],
+            contentStart: node.position.end.offset,
+            contentEnd: node.position.end.offset,
+          };
+        } else {
+          currentSection = {
+            headings: [
+              ...(h1Title ? [h1Title] : []),
+              ...(currentH2 ? [currentH2] : []),
+              text,
+            ],
+            contentStart: node.position.end.offset,
+            contentEnd: node.position.end.offset,
+          };
+        }
       }
+      // h4+ headings: treated as content within the current section (no split)
     }
     // Non-heading nodes extend the current section
   }

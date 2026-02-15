@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeFile, unlink } from 'node:fs/promises';
 import { parseMarkdownFile } from '../markdown-parser.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -81,6 +82,44 @@ describe('parseMarkdownFile', () => {
     // Non-split chunks should not have chunkIndex
     const normalChunks = chunks.filter(c => c.metadata?.chunkIndex === undefined);
     expect(normalChunks.length).toBeGreaterThan(0);
+  });
+
+  it('captures h1 body content as a chunk', async () => {
+    const chunks = await parseMarkdownFile(glossaryPath, apiId);
+    const introChunk = chunks.find(c => c.title === 'Payments API Glossary');
+    expect(introChunk).toBeDefined();
+    expect(introChunk!.content).toContain('Common terms and definitions');
+  });
+
+  it('preserves content after h4 headings within parent section', async () => {
+    const tmpPath = resolve(fixturesDir, 'h4-temp-guide.md');
+    await writeFile(tmpPath, [
+      '# Guide',
+      '',
+      '## Section One',
+      '',
+      'Intro paragraph.',
+      '',
+      '#### Sub-detail',
+      '',
+      'This should not be lost.',
+      '',
+    ].join('\n'));
+    try {
+      const chunks = await parseMarkdownFile(tmpPath, apiId);
+      const section = chunks.find(c => c.title === 'Section One');
+      expect(section).toBeDefined();
+      expect(section!.content).toContain('Sub-detail');
+      expect(section!.content).toContain('This should not be lost.');
+    } finally {
+      await unlink(tmpPath);
+    }
+  });
+
+  it('throws with context when file does not exist', async () => {
+    await expect(parseMarkdownFile('/nonexistent.md', 'test-api')).rejects.toThrow(
+      'Failed to read markdown file for "test-api" at /nonexistent.md',
+    );
   });
 
   it('chunk IDs follow the expected format', async () => {

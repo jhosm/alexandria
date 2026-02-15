@@ -11,24 +11,23 @@ function sha256(content: string): string {
   return createHash('sha256').update(content).digest('hex');
 }
 
-function renderSchema(schema: SchemaObject, indent = 0): string {
-  const prefix = '  '.repeat(indent);
+function renderSchema(schema: SchemaObject): string {
   const lines: string[] = [];
 
   if (schema.type === 'object' && schema.properties) {
-    lines.push(`${prefix}- type: object`);
-    lines.push(`${prefix}  properties:`);
+    lines.push('- type: object');
+    lines.push('  properties:');
     for (const [name, prop] of Object.entries(schema.properties)) {
       const p = prop as SchemaObject;
       const type = p.type ?? 'unknown';
       const desc = p.description ? ` - ${p.description}` : '';
-      lines.push(`${prefix}    - ${name} (${type})${desc}`);
+      lines.push(`    - ${name} (${type})${desc}`);
     }
   } else if (schema.type === 'array' && 'items' in schema) {
     const items = schema.items as SchemaObject;
-    lines.push(`${prefix}- type: array of ${items.type ?? 'object'}`);
+    lines.push(`- type: array of ${items.type ?? 'object'}`);
   } else if (schema.type) {
-    lines.push(`${prefix}- type: ${schema.type}`);
+    lines.push(`- type: ${schema.type}`);
   }
 
   return lines.join('\n');
@@ -188,8 +187,22 @@ function buildSchemaChunks(doc: Doc, apiId: string): Chunk[] {
 }
 
 export async function parseOpenApiSpec(filePath: string, apiId: string): Promise<Chunk[]> {
-  const doc = await SwaggerParser.dereference(filePath) as Doc;
+  let raw: Record<string, unknown>;
+  try {
+    raw = await SwaggerParser.dereference(filePath) as Record<string, unknown>;
+  } catch (error) {
+    throw new Error(
+      `Failed to parse OpenAPI spec for "${apiId}" at ${filePath}: ${error instanceof Error ? error.message : error}`,
+    );
+  }
 
+  if (!raw.openapi || typeof raw.openapi !== 'string' || !raw.openapi.startsWith('3.')) {
+    throw new Error(
+      `Spec at ${filePath} is not OpenAPI 3.x (found: ${raw.openapi ?? raw.swagger ?? 'unknown'}). Only OpenAPI 3.x is supported.`,
+    );
+  }
+
+  const doc = raw as unknown as Doc;
   const chunks: Chunk[] = [];
   chunks.push(buildOverviewChunk(doc, apiId));
   chunks.push(...buildEndpointChunks(doc, apiId));

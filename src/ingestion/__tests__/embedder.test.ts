@@ -100,6 +100,57 @@ describe('embedder', () => {
     await expect(embedDocuments(['test'])).rejects.toThrow('Voyage API error (429)');
   });
 
+  it('rejects entirely when a mid-batch API call fails', async () => {
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce(makeResponse(Array.from({ length: 128 }, () => [0.1])))
+      .mockResolvedValueOnce(new Response('rate limit exceeded', { status: 429 }));
+    vi.stubGlobal('fetch', mockFetch);
+
+    const texts = Array.from({ length: 200 }, (_, i) => `text-${i}`);
+    await expect(embedDocuments(texts)).rejects.toThrow(
+      'Embedding failed on batch 2/2 (texts 128-199)',
+    );
+  });
+
+  it('throws when API returns wrong number of embeddings', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      makeResponse([[0.1, 0.2]]),
+    );
+    vi.stubGlobal('fetch', mockFetch);
+
+    await expect(embedDocuments(['hello', 'world'])).rejects.toThrow(
+      'expected 2 embeddings, got 1',
+    );
+  });
+
+  it('throws when API returns empty embedding array', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [{ embedding: [] }] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', mockFetch);
+
+    await expect(embedDocuments(['test'])).rejects.toThrow(
+      'invalid embedding at index 0',
+    );
+  });
+
+  it('embedQuery throws when API returns empty data', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    vi.stubGlobal('fetch', mockFetch);
+
+    await expect(embedQuery('test')).rejects.toThrow(
+      'expected 1 embeddings, got 0',
+    );
+  });
+
   it('returns Float32Array instances', async () => {
     const mockFetch = vi.fn()
       .mockResolvedValueOnce(makeResponse([[0.1, 0.2], [0.3, 0.4]]))
