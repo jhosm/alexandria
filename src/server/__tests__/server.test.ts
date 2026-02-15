@@ -15,6 +15,12 @@ vi.mock('../../ingestion/embedder.js', () => ({
   embedQuery: vi.fn(async () => new Float32Array([0.1, 0.2, 0.3])),
 }));
 
+type ToolResult = Awaited<ReturnType<Client['callTool']>>;
+
+function textContent(result: ToolResult): string {
+  return (result.content as Array<{ type: string; text: string }>)[0].text;
+}
+
 let db: Database.Database;
 let client: Client;
 let mcpServer: McpServer;
@@ -106,9 +112,9 @@ describe('MCP server integration', () => {
   });
 
   it('4.2 — list-apis returns indexed APIs', async () => {
-    const result = await client.callTool({ name: 'list-apis', arguments: {} });
-    const text = (result.content as Array<{ type: string; text: string }>)[0]
-      .text;
+    const text = textContent(
+      await client.callTool({ name: 'list-apis', arguments: {} }),
+    );
 
     expect(text).toContain('petstore');
     expect(text).toContain('v1.0.0');
@@ -116,42 +122,40 @@ describe('MCP server integration', () => {
   });
 
   it('4.3 — search-docs returns relevant results', async () => {
-    const result = await client.callTool({
-      name: 'search-docs',
-      arguments: { query: 'list pets' },
-    });
-    const text = (result.content as Array<{ type: string; text: string }>)[0]
-      .text;
+    const text = textContent(
+      await client.callTool({
+        name: 'search-docs',
+        arguments: { query: 'list pets' },
+      }),
+    );
 
     expect(text).toContain('Search Results');
     expect(text).toContain('pets');
   });
 
-  it('4.3b — search-docs returns no-results message', async () => {
-    // Mock embedQuery to return a very different vector for this test
+  it('4.3b — search-docs handles query with no FTS matches', async () => {
     const { embedQuery } = await import('../../ingestion/embedder.js');
     vi.mocked(embedQuery).mockResolvedValueOnce(new Float32Array([99, 99, 99]));
 
-    const result = await client.callTool({
-      name: 'search-docs',
-      arguments: { query: 'xyzzy nonexistent topic' },
-    });
-    const text = (result.content as Array<{ type: string; text: string }>)[0]
-      .text;
+    const text = textContent(
+      await client.callTool({
+        name: 'search-docs',
+        arguments: { query: 'xyzzy nonexistent topic' },
+      }),
+    );
 
-    // FTS won't match "xyzzy" and vec distance will be large
-    // The search may still return results via vec (distance-based, not filtered)
-    // so we just verify we get a valid response
+    // Vec search is distance-based (not filtered), so results may still come
+    // back. We verify a valid response without asserting empty results.
     expect(text).toBeDefined();
   });
 
   it('4.3c — search-docs filters by API name', async () => {
-    const result = await client.callTool({
-      name: 'search-docs',
-      arguments: { query: 'pets', apiName: 'petstore' },
-    });
-    const text = (result.content as Array<{ type: string; text: string }>)[0]
-      .text;
+    const text = textContent(
+      await client.callTool({
+        name: 'search-docs',
+        arguments: { query: 'pets', apiName: 'petstore' },
+      }),
+    );
 
     expect(text).toContain('petstore');
   });
@@ -161,19 +165,30 @@ describe('MCP server integration', () => {
       name: 'search-docs',
       arguments: { query: 'test', apiName: 'nonexistent' },
     });
-    const text = (result.content as Array<{ type: string; text: string }>)[0]
-      .text;
 
-    expect(text).toContain('API "nonexistent" not found');
+    expect(textContent(result)).toContain('API "nonexistent" not found');
+    expect(result.isError).toBe(true);
+  });
+
+  it('4.3e — search-docs filters by chunk types', async () => {
+    const text = textContent(
+      await client.callTool({
+        name: 'search-docs',
+        arguments: { query: 'pets', types: ['endpoint'] },
+      }),
+    );
+
+    expect(text).toContain('endpoint');
+    expect(text).not.toContain('Petstore API Overview');
   });
 
   it('4.4 — get-api-endpoints returns endpoint listing', async () => {
-    const result = await client.callTool({
-      name: 'get-api-endpoints',
-      arguments: { apiName: 'petstore' },
-    });
-    const text = (result.content as Array<{ type: string; text: string }>)[0]
-      .text;
+    const text = textContent(
+      await client.callTool({
+        name: 'get-api-endpoints',
+        arguments: { apiName: 'petstore' },
+      }),
+    );
 
     expect(text).toContain('petstore Endpoints');
     expect(text).toContain('**GET**');
@@ -186,14 +201,23 @@ describe('MCP server integration', () => {
       name: 'get-api-endpoints',
       arguments: { apiName: 'nonexistent' },
     });
-    const text = (result.content as Array<{ type: string; text: string }>)[0]
-      .text;
 
-    expect(text).toContain('API "nonexistent" not found');
+    expect(textContent(result)).toContain('API "nonexistent" not found');
+    expect(result.isError).toBe(true);
+  });
+
+  it('4.4c — get-api-endpoints returns empty-state for API with no endpoints', async () => {
+    const text = textContent(
+      await client.callTool({
+        name: 'get-api-endpoints',
+        arguments: { apiName: 'payments' },
+      }),
+    );
+
+    expect(text).toContain('No endpoints found for "payments"');
   });
 
   it('4.2b — list-apis returns empty-state when no APIs', async () => {
-    // Create a separate server with an empty DB
     const emptyDb = createTestDb(DIM);
     const emptyServer = new McpServer({
       name: 'alexandria-empty',
@@ -206,12 +230,12 @@ describe('MCP server integration', () => {
     await emptyServer.connect(st);
     await emptyClient.connect(ct);
 
-    const result = await emptyClient.callTool({
-      name: 'list-apis',
-      arguments: {},
-    });
-    const text = (result.content as Array<{ type: string; text: string }>)[0]
-      .text;
+    const text = textContent(
+      await emptyClient.callTool({
+        name: 'list-apis',
+        arguments: {},
+      }),
+    );
 
     expect(text).toBe('No APIs indexed yet.');
 

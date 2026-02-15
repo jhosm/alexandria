@@ -19,17 +19,28 @@ export function registerGetApiEndpoints(
       },
     },
     ({ apiName }) => {
-      const api = getApis(db).find((a) => a.name === apiName);
-      if (!api) {
+      try {
+        const api = getApis(db).find((a) => a.name === apiName);
+        if (!api) {
+          return {
+            content: [{ type: 'text', text: `API "${apiName}" not found.` }],
+            isError: true,
+          };
+        }
+
+        const endpoints = getChunksByApi(db, api.id, 'endpoint');
+        const text = formatEndpointList(apiName, endpoints);
+
+        return { content: [{ type: 'text', text }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
         return {
-          content: [{ type: 'text', text: `API "${apiName}" not found.` }],
+          content: [
+            { type: 'text', text: `Failed to get endpoints: ${message}` },
+          ],
+          isError: true,
         };
       }
-
-      const endpoints = getChunksByApi(db, api.id, 'endpoint');
-      const text = formatEndpointList(apiName, endpoints);
-
-      return { content: [{ type: 'text', text }] };
     },
   );
 }

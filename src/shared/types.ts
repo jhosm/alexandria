@@ -1,10 +1,13 @@
-export type ChunkType =
-  | 'overview'
-  | 'endpoint'
-  | 'schema'
-  | 'glossary'
-  | 'use-case'
-  | 'guide';
+export const CHUNK_TYPES = [
+  'overview',
+  'endpoint',
+  'schema',
+  'glossary',
+  'use-case',
+  'guide',
+] as const;
+
+export type ChunkType = (typeof CHUNK_TYPES)[number];
 
 export interface Chunk {
   id: string;
