@@ -25,6 +25,11 @@ const SCHEMA = `
 
   CREATE INDEX IF NOT EXISTS idx_chunks_api_id ON chunks(api_id);
   CREATE INDEX IF NOT EXISTS idx_chunks_content_hash ON chunks(content_hash);
+
+  CREATE TABLE IF NOT EXISTS config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
 `;
 
 const FTS_SCHEMA = `
@@ -35,26 +40,42 @@ const FTS_SCHEMA = `
   );
 `;
 
-const VEC_SCHEMA = `
-  CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(
-    chunk_id text,
-    embedding float[1024]
-  );
-`;
-
-function initDb(db: Database.Database): void {
+function initDb(db: Database.Database, dimension: number = 1024): void {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   sqliteVec.load(db);
   db.exec(SCHEMA);
   db.exec(FTS_SCHEMA);
-  db.exec(VEC_SCHEMA);
+
+  const stored = db
+    .prepare("SELECT value FROM config WHERE key = 'embedding_dimension'")
+    .get() as { value: string } | undefined;
+
+  if (stored) {
+    const storedDim = Number(stored.value);
+    if (storedDim !== dimension) {
+      throw new Error(
+        `Embedding dimension mismatch: database has ${storedDim}d vectors but provider requires ${dimension}d. Re-index with: npm run ingest -- --all`,
+      );
+    }
+  } else {
+    db.prepare(
+      "INSERT INTO config (key, value) VALUES ('embedding_dimension', ?)",
+    ).run(String(dimension));
+    const vecSql = `
+      CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(
+        chunk_id text,
+        embedding float[${dimension}]
+      );
+    `;
+    db.exec(vecSql);
+  }
 }
 
 let _db: Database.Database | null = null;
 let _dbPath: string | null = null;
 
-export function getDb(dbPath?: string): Database.Database {
+export function getDb(dbPath?: string, dimension?: number): Database.Database {
   const path = dbPath ?? process.env.ALEXANDRIA_DB_PATH ?? './alexandria.db';
   if (_db) {
     if (_dbPath !== path) {
@@ -66,7 +87,7 @@ export function getDb(dbPath?: string): Database.Database {
   }
   _dbPath = path;
   _db = new Database(path);
-  initDb(_db);
+  initDb(_db, dimension);
   return _db;
 }
 
@@ -79,8 +100,8 @@ export function closeDb(): void {
   }
 }
 
-export function createTestDb(): Database.Database {
+export function createTestDb(dimension: number = 1024): Database.Database {
   const db = new Database(':memory:');
-  initDb(db);
+  initDb(db, dimension);
   return db;
 }
