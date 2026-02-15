@@ -6,6 +6,7 @@ describe('OllamaProvider', () => {
     vi.restoreAllMocks();
     delete process.env.OLLAMA_URL;
     delete process.env.OLLAMA_MODEL;
+    delete process.env.OLLAMA_DIMENSION;
   });
 
   it('sends correct URL and body, returns Float32Array results', async () => {
@@ -106,5 +107,61 @@ describe('OllamaProvider', () => {
     expect(mockFetch.mock.calls[0][0]).toBe('http://myhost:9999/api/embed');
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.model).toBe('custom-model');
+  });
+
+  it('uses OLLAMA_DIMENSION env var for dimension', () => {
+    process.env.OLLAMA_DIMENSION = '1536';
+    const provider = new OllamaProvider();
+    expect(provider.dimension).toBe(1536);
+  });
+
+  it('defaults dimension to 768', () => {
+    const provider = new OllamaProvider();
+    expect(provider.dimension).toBe(768);
+  });
+
+  it('throws when API returns wrong number of embeddings', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ embeddings: [[0.1, 0.2]] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', mockFetch);
+
+    const provider = new OllamaProvider();
+    await expect(provider.embedDocuments(['hello', 'world'])).rejects.toThrow(
+      'expected 2 embeddings, got 1',
+    );
+  });
+
+  it('throws when API returns missing embeddings field', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', mockFetch);
+
+    const provider = new OllamaProvider();
+    await expect(provider.embedDocuments(['test'])).rejects.toThrow(
+      'missing embeddings array',
+    );
+  });
+
+  it('throws when API returns empty embedding at index', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ embeddings: [[]] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', mockFetch);
+
+    const provider = new OllamaProvider();
+    await expect(provider.embedDocuments(['test'])).rejects.toThrow(
+      'invalid embedding at index 0',
+    );
   });
 });

@@ -12,7 +12,7 @@ import {
 } from '../db/queries.js';
 import { parseOpenApiSpec } from './openapi-parser.js';
 import { parseMarkdownFile } from './markdown-parser.js';
-import { embedDocuments } from './embedder.js';
+import { embedDocuments, getDimension } from './embedder.js';
 import { loadRegistry } from './registry.js';
 import type { Chunk, Api } from '../shared/types.js';
 
@@ -46,7 +46,7 @@ export async function ingestApi(
   docsPath?: string,
 ): Promise<IngestResult> {
   const id = apiId(name);
-  const db = getDb();
+  const db = getDb(undefined, getDimension());
 
   // Parse spec + docs → collect all chunks
   const chunks: Chunk[] = [];

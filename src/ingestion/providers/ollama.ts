@@ -2,9 +2,15 @@ import type { EmbeddingProvider } from './types.js';
 
 const DEFAULT_URL = 'http://localhost:11434';
 const DEFAULT_MODEL = 'nomic-embed-text';
+const DEFAULT_DIMENSION = 768;
 
 export class OllamaProvider implements EmbeddingProvider {
-  readonly dimension = 768;
+  readonly dimension: number;
+
+  constructor() {
+    const envDim = process.env.OLLAMA_DIMENSION;
+    this.dimension = envDim ? Number(envDim) : DEFAULT_DIMENSION;
+  }
 
   private get url(): string {
     return process.env.OLLAMA_URL || DEFAULT_URL;
@@ -36,11 +42,32 @@ export class OllamaProvider implements EmbeddingProvider {
     }
 
     const json = await response.json();
-    return json.embeddings.map((e: number[]) => new Float32Array(e));
+
+    if (!json.embeddings || !Array.isArray(json.embeddings)) {
+      throw new Error(
+        'Ollama API returned unexpected response: missing embeddings array',
+      );
+    }
+
+    if (json.embeddings.length !== texts.length) {
+      throw new Error(
+        `Ollama API returned unexpected response: expected ${texts.length} embeddings, got ${json.embeddings.length}`,
+      );
+    }
+
+    return json.embeddings.map((e: number[], i: number) => {
+      if (!Array.isArray(e) || e.length === 0) {
+        throw new Error(`Ollama API returned invalid embedding at index ${i}`);
+      }
+      return new Float32Array(e);
+    });
   }
 
   async embedQuery(text: string): Promise<Float32Array> {
     const results = await this.embedDocuments([text]);
+    if (results.length !== 1) {
+      throw new Error(`Expected 1 query embedding, got ${results.length}`);
+    }
     return results[0];
   }
 }

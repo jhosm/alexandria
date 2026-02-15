@@ -23,6 +23,7 @@ describe('TransformersProvider', () => {
     } else {
       process.env.TRANSFORMERS_MODEL = originalModel;
     }
+    delete process.env.TRANSFORMERS_DIMENSION;
   });
 
   async function createProvider() {
@@ -121,6 +122,27 @@ describe('TransformersProvider', () => {
     expect(mockPipelineFn).toHaveBeenCalledWith(
       'feature-extraction',
       'custom/model',
+    );
+  });
+
+  it('uses TRANSFORMERS_DIMENSION env var for dimension', async () => {
+    process.env.TRANSFORMERS_DIMENSION = '768';
+    const provider = await createProvider();
+    expect(provider.dimension).toBe(768);
+  });
+
+  it('defaults dimension to 384', async () => {
+    const provider = await createProvider();
+    expect(provider.dimension).toBe(384);
+  });
+
+  it('throws descriptive error when inference fails', async () => {
+    mockPipeline.mockRejectedValue(new Error('out of memory'));
+    mockPipelineFn.mockResolvedValue(mockPipeline);
+
+    const provider = await createProvider();
+    await expect(provider.embedDocuments(['test'])).rejects.toThrow(
+      'Transformers inference failed: out of memory',
     );
   });
 });

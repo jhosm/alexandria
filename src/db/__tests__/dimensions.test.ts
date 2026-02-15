@@ -71,4 +71,24 @@ describe('Dynamic embedding dimensions', () => {
     expect(count.c).toBe(1);
     db.close();
   });
+
+  it('should throw on invalid dimension', () => {
+    expect(() => createTestDb(0)).toThrow('Invalid embedding dimension: 0');
+    expect(() => createTestDb(-1)).toThrow('Invalid embedding dimension: -1');
+    expect(() => createTestDb(1.5)).toThrow('Invalid embedding dimension: 1.5');
+  });
+
+  it('should throw when cached db is accessed with a different dimension', () => {
+    getDb(tmpDbPath, 512);
+    // DB is still open (not closed) — second call with different dimension
+    expect(() => getDb(tmpDbPath, 768)).toThrow(
+      /Embedding dimension mismatch: database has 512d vectors but provider requires 768d/,
+    );
+  });
+
+  it('should return cached db when dimension matches', () => {
+    const db1 = getDb(tmpDbPath, 512);
+    const db2 = getDb(tmpDbPath, 512);
+    expect(db2).toBe(db1);
+  });
 });
