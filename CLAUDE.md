@@ -50,6 +50,26 @@ ALEXANDRIA_PORT=3000       # MCP server port (optional, default 3000)
 - **Deterministic IDs**: Text UUIDs from API name + chunk identity enable idempotent upserts
 - **Three-table sync**: chunks, chunks_fts, chunks_vec always updated in same transaction
 
+## Implementation Roadmap
+
+Each step maps to an OpenSpec change in `openspec/changes/`. Designs and tasks live there.
+
+```
+Phase 1 ─ project-foundation
+           Scaffold, SQLite schema, shared types, hybrid search queries
+           └── Unblocks everything below
+
+Phase 2 ─ openapi-parser ─┐
+           markdown-parser ─┼── Can be built in parallel (only need Phase 1)
+           voyage-embedder ─┘
+
+Phase 3 ─ ingestion-cli
+           Wires parsers + embedder into CLI pipeline (needs Phases 1–2)
+
+Phase 4 ─ mcp-server
+           Express + MCP HTTP serving search tools (needs Phases 1–2; reads data from Phase 3)
+```
+
 # General Guidelines
 
 ## 1. Think Before Coding
