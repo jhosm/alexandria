@@ -1,0 +1,6 @@
+apis:
+  - name: petstore
+    spec: ./specs/petstore/openapi.yaml
+    docs: ./specs/petstore/docs/
+  - name: payments
+    spec: ./specs/payments/openapi.yaml
