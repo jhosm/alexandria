@@ -24,7 +24,7 @@ vi.mock('../../db/index.js', async (importOriginal) => {
   };
 });
 
-import { runCli } from '../index.js';
+import { runCli, CliError } from '../index.js';
 import { parseOpenApiSpec } from '../openapi-parser.js';
 import { parseMarkdownFile } from '../markdown-parser.js';
 import { embedDocuments } from '../embedder.js';
@@ -49,6 +49,7 @@ describe('runCli', () => {
   let db: Database.Database;
   let logSpy: ReturnType<typeof vi.spyOn>;
   let errorSpy: ReturnType<typeof vi.spyOn>;
+  let savedExitCode: number | undefined;
 
   beforeEach(() => {
     db = createTestDb();
@@ -59,39 +60,47 @@ describe('runCli', () => {
     vi.mocked(parseOpenApiSpec).mockResolvedValue([]);
     vi.mocked(parseMarkdownFile).mockResolvedValue([]);
 
-    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
-      throw new Error(`process.exit(${code})`);
-    }) as never);
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    savedExitCode = process.exitCode;
+    process.exitCode = undefined;
   });
 
   afterEach(() => {
     db.close();
+    process.exitCode = savedExitCode;
     vi.restoreAllMocks();
   });
 
-  it('exits 1 when no arguments provided', async () => {
-    await expect(runCli({})).rejects.toThrow('process.exit(1)');
-    expect(errorSpy).toHaveBeenCalledWith(
-      'Error: provide --api and --spec, or --all',
+  it('throws CliError when no arguments provided', async () => {
+    await expect(runCli({})).rejects.toThrow(
+      'provide --api and --spec, or --all',
+    );
+    await expect(runCli({})).rejects.toBeInstanceOf(CliError);
+    expect(closeDb).toHaveBeenCalled();
+  });
+
+  it('throws CliError when --api is provided without --spec', async () => {
+    await expect(runCli({ api: 'foo' })).rejects.toThrow(
+      'provide --api and --spec, or --all',
+    );
+    expect(closeDb).toHaveBeenCalled();
+  });
+
+  it('throws CliError when --spec is provided without --api', async () => {
+    await expect(runCli({ spec: '/some/path.yaml' })).rejects.toThrow(
+      'provide --api and --spec, or --all',
     );
   });
 
-  it('exits 1 when --api is provided without --spec', async () => {
-    await expect(runCli({ api: 'foo' })).rejects.toThrow('process.exit(1)');
-    expect(errorSpy).toHaveBeenCalledWith(
-      'Error: provide --api and --spec, or --all',
-    );
-  });
-
-  it('exits 1 when --all is used without apis.yml', async () => {
+  it('throws CliError when --all is used without apis.yml', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'alexandria-runcli-'));
     const origCwd = process.cwd();
     try {
       process.chdir(tmpDir);
-      await expect(runCli({ all: true })).rejects.toThrow('process.exit(1)');
-      expect(errorSpy).toHaveBeenCalledWith('Error: apis.yml not found');
+      await expect(runCli({ all: true })).rejects.toThrow('apis.yml not found');
+      await expect(runCli({ all: true })).rejects.toBeInstanceOf(CliError);
+      expect(closeDb).toHaveBeenCalled();
     } finally {
       process.chdir(origCwd);
       rmSync(tmpDir, { recursive: true, force: true });
@@ -135,6 +144,19 @@ describe('runCli', () => {
     );
   });
 
+  it('propagates embedding errors in single-API mode and calls closeDb', async () => {
+    vi.mocked(parseOpenApiSpec).mockImplementation(async (_path, apiId) => [
+      makeChunk('c1', apiId),
+    ]);
+    vi.mocked(embedDocuments).mockRejectedValue(new Error('Voyage API 429'));
+
+    const fixtures = import.meta.dirname + '/fixtures';
+    await expect(
+      runCli({ api: 'testapi', spec: fixtures + '/sample-openapi.yaml' }),
+    ).rejects.toThrow('Voyage API 429');
+    expect(closeDb).toHaveBeenCalled();
+  });
+
   it('--all processes registry and prints summary', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'alexandria-runcli-'));
     const origCwd = process.cwd();
@@ -170,7 +192,24 @@ describe('runCli', () => {
     }
   });
 
-  it('--all handles per-API errors and prints summary with failure count', async () => {
+  it('--all with empty registry prints summary with zero APIs', async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'alexandria-runcli-'));
+    const origCwd = process.cwd();
+    try {
+      writeFileSync(join(tmpDir, 'apis.yml'), 'apis: []\n');
+      process.chdir(tmpDir);
+      await runCli({ all: true });
+      const summaryCalls = logSpy.mock.calls.map((c) => c[0]);
+      expect(
+        summaryCalls.some((s: string) => s.includes('Done. 0 APIs processed')),
+      ).toBe(true);
+    } finally {
+      process.chdir(origCwd);
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('--all handles per-API errors and sets exitCode 1', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'alexandria-runcli-'));
     const origCwd = process.cwd();
     try {
@@ -205,6 +244,30 @@ describe('runCli', () => {
             s.includes('1 API processed') && s.includes('1 failed'),
         ),
       ).toBe(true);
+      expect(process.exitCode).toBe(1);
+    } finally {
+      process.chdir(origCwd);
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('--all re-throws unrecoverable errors', async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'alexandria-runcli-'));
+    const origCwd = process.cwd();
+    try {
+      const fixtures = import.meta.dirname + '/fixtures';
+      writeFileSync(
+        join(tmpDir, 'apis.yml'),
+        `apis:\n  - name: bad\n    spec: ${fixtures}/sample-openapi.yaml\n`,
+      );
+
+      vi.mocked(parseOpenApiSpec).mockImplementation(async () => {
+        throw new TypeError('Cannot read properties of undefined');
+      });
+
+      process.chdir(tmpDir);
+      await expect(runCli({ all: true })).rejects.toThrow(TypeError);
+      expect(closeDb).toHaveBeenCalled();
     } finally {
       process.chdir(origCwd);
       rmSync(tmpDir, { recursive: true, force: true });
