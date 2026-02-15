@@ -65,7 +65,16 @@ function buildEndpointChunks(doc: Doc, apiId: string): Chunk[] {
   for (const [path, pathItem] of Object.entries(doc.paths ?? {})) {
     if (!pathItem) continue;
 
-    const methods = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'] as const;
+    const methods = [
+      'get',
+      'put',
+      'post',
+      'delete',
+      'options',
+      'head',
+      'patch',
+      'trace',
+    ] as const;
     for (const method of methods) {
       const operation = pathItem[method];
       if (!operation) continue;
@@ -92,10 +101,14 @@ function buildEndpointChunks(doc: Doc, apiId: string): Chunk[] {
       }
 
       // Request body
-      const requestBody = operation.requestBody as OpenAPIV3.RequestBodyObject | undefined;
+      const requestBody = operation.requestBody as
+        | OpenAPIV3.RequestBodyObject
+        | undefined;
       if (requestBody?.content) {
         lines.push('\n## Request Body\n');
-        for (const [mediaType, mediaObj] of Object.entries(requestBody.content)) {
+        for (const [mediaType, mediaObj] of Object.entries(
+          requestBody.content,
+        )) {
           lines.push(`Content-Type: ${mediaType}`);
           if (mediaObj.schema) {
             lines.push(renderSchema(mediaObj.schema as SchemaObject));
@@ -186,17 +199,27 @@ function buildSchemaChunks(doc: Doc, apiId: string): Chunk[] {
   return chunks;
 }
 
-export async function parseOpenApiSpec(filePath: string, apiId: string): Promise<Chunk[]> {
+export async function parseOpenApiSpec(
+  filePath: string,
+  apiId: string,
+): Promise<Chunk[]> {
   let raw: Record<string, unknown>;
   try {
-    raw = await SwaggerParser.dereference(filePath) as Record<string, unknown>;
+    raw = (await SwaggerParser.dereference(filePath)) as Record<
+      string,
+      unknown
+    >;
   } catch (error) {
     throw new Error(
       `Failed to parse OpenAPI spec for "${apiId}" at ${filePath}: ${error instanceof Error ? error.message : error}`,
     );
   }
 
-  if (!raw.openapi || typeof raw.openapi !== 'string' || !raw.openapi.startsWith('3.')) {
+  if (
+    !raw.openapi ||
+    typeof raw.openapi !== 'string' ||
+    !raw.openapi.startsWith('3.')
+  ) {
     throw new Error(
       `Spec at ${filePath} is not OpenAPI 3.x (found: ${raw.openapi ?? raw.swagger ?? 'unknown'}). Only OpenAPI 3.x is supported.`,
     );

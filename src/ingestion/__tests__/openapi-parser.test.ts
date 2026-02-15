@@ -3,7 +3,10 @@ import { resolve } from 'node:path';
 import { writeFile, unlink } from 'node:fs/promises';
 import { parseOpenApiSpec } from '../openapi-parser.js';
 
-const FIXTURE_PATH = resolve(import.meta.dirname, 'fixtures/sample-openapi.yaml');
+const FIXTURE_PATH = resolve(
+  import.meta.dirname,
+  'fixtures/sample-openapi.yaml',
+);
 const API_ID = 'petstore';
 
 describe('parseOpenApiSpec', () => {
@@ -15,17 +18,19 @@ describe('parseOpenApiSpec', () => {
 
   it('produces correct chunk types', async () => {
     const chunks = await parseOpenApiSpec(FIXTURE_PATH, API_ID);
-    const types = chunks.map(c => c.type);
-    expect(types.filter(t => t === 'overview')).toHaveLength(1);
-    expect(types.filter(t => t === 'endpoint')).toHaveLength(3);
-    expect(types.filter(t => t === 'schema')).toHaveLength(1);
+    const types = chunks.map((c) => c.type);
+    expect(types.filter((t) => t === 'overview')).toHaveLength(1);
+    expect(types.filter((t) => t === 'endpoint')).toHaveLength(3);
+    expect(types.filter((t) => t === 'schema')).toHaveLength(1);
   });
 
   it('endpoint chunks contain correct metadata', async () => {
     const chunks = await parseOpenApiSpec(FIXTURE_PATH, API_ID);
-    const endpoints = chunks.filter(c => c.type === 'endpoint');
+    const endpoints = chunks.filter((c) => c.type === 'endpoint');
 
-    const listPets = endpoints.find(c => c.metadata?.operationId === 'listPets');
+    const listPets = endpoints.find(
+      (c) => c.metadata?.operationId === 'listPets',
+    );
     expect(listPets).toBeDefined();
     expect(listPets!.metadata).toEqual({
       path: '/pets',
@@ -34,7 +39,9 @@ describe('parseOpenApiSpec', () => {
       operationId: 'listPets',
     });
 
-    const createPet = endpoints.find(c => c.metadata?.operationId === 'createPet');
+    const createPet = endpoints.find(
+      (c) => c.metadata?.operationId === 'createPet',
+    );
     expect(createPet).toBeDefined();
     expect(createPet!.metadata).toEqual({
       path: '/pets',
@@ -43,7 +50,7 @@ describe('parseOpenApiSpec', () => {
       operationId: 'createPet',
     });
 
-    const getPet = endpoints.find(c => c.metadata?.operationId === 'getPet');
+    const getPet = endpoints.find((c) => c.metadata?.operationId === 'getPet');
     expect(getPet).toBeDefined();
     expect(getPet!.metadata).toEqual({
       path: '/pets/{petId}',
@@ -55,7 +62,7 @@ describe('parseOpenApiSpec', () => {
 
   it('schema chunks only generated for schemas with 3+ properties', async () => {
     const chunks = await parseOpenApiSpec(FIXTURE_PATH, API_ID);
-    const schemas = chunks.filter(c => c.type === 'schema');
+    const schemas = chunks.filter((c) => c.type === 'schema');
 
     // Pet (4 properties) should be included
     expect(schemas).toHaveLength(1);
@@ -63,7 +70,7 @@ describe('parseOpenApiSpec', () => {
     expect(schemas[0].metadata?.propertyCount).toBe(4);
 
     // PetInput (2 properties) should not be included
-    const petInput = schemas.find(c => c.metadata?.schemaName === 'PetInput');
+    const petInput = schemas.find((c) => c.metadata?.schemaName === 'PetInput');
     expect(petInput).toBeUndefined();
   });
 
@@ -80,30 +87,38 @@ describe('parseOpenApiSpec', () => {
   it('chunk IDs follow expected format', async () => {
     const chunks = await parseOpenApiSpec(FIXTURE_PATH, API_ID);
 
-    const overview = chunks.find(c => c.type === 'overview');
+    const overview = chunks.find((c) => c.type === 'overview');
     expect(overview!.id).toBe('petstore:overview');
 
-    const endpoints = chunks.filter(c => c.type === 'endpoint');
+    const endpoints = chunks.filter((c) => c.type === 'endpoint');
     for (const ep of endpoints) {
       const { method, path } = ep.metadata as { method: string; path: string };
       expect(ep.id).toBe(`petstore:endpoint:${method}:${path}`);
     }
 
-    const schemas = chunks.filter(c => c.type === 'schema');
+    const schemas = chunks.filter((c) => c.type === 'schema');
     for (const sc of schemas) {
       expect(sc.id).toBe(`petstore:schema:${sc.metadata?.schemaName}`);
     }
   });
 
   it('throws with context when spec file does not exist', async () => {
-    await expect(parseOpenApiSpec('/nonexistent.yaml', 'test-api')).rejects.toThrow(
+    await expect(
+      parseOpenApiSpec('/nonexistent.yaml', 'test-api'),
+    ).rejects.toThrow(
       'Failed to parse OpenAPI spec for "test-api" at /nonexistent.yaml',
     );
   });
 
   it('rejects Swagger 2.0 specs with clear error', async () => {
-    const swagger2Path = resolve(import.meta.dirname, 'fixtures/swagger2-temp.yaml');
-    await writeFile(swagger2Path, 'swagger: "2.0"\ninfo:\n  title: Old\n  version: "1.0"\npaths: {}');
+    const swagger2Path = resolve(
+      import.meta.dirname,
+      'fixtures/swagger2-temp.yaml',
+    );
+    await writeFile(
+      swagger2Path,
+      'swagger: "2.0"\ninfo:\n  title: Old\n  version: "1.0"\npaths: {}',
+    );
     try {
       await expect(parseOpenApiSpec(swagger2Path, 'old-api')).rejects.toThrow(
         'not OpenAPI 3.x',
@@ -115,7 +130,7 @@ describe('parseOpenApiSpec', () => {
 
   it('overview chunk contains title and version', async () => {
     const chunks = await parseOpenApiSpec(FIXTURE_PATH, API_ID);
-    const overview = chunks.find(c => c.type === 'overview')!;
+    const overview = chunks.find((c) => c.type === 'overview')!;
 
     expect(overview.title).toBe('Pet Store API');
     expect(overview.content).toContain('Pet Store API');

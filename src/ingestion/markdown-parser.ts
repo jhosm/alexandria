@@ -38,13 +38,20 @@ function hashContent(content: string): string {
   return createHash('sha256').update(content).digest('hex');
 }
 
-function extractHeadingText(node: { children: Array<{ value?: string; children?: Array<{ value?: string }> }> }): string {
+function extractHeadingText(node: {
+  children: Array<{ value?: string; children?: Array<{ value?: string }> }>;
+}): string {
   // Flatten inline children to get heading text
-  return node.children.map((child: { value?: string; children?: Array<{ value?: string }> }) => {
-    if (child.value) return child.value;
-    if (child.children) return child.children.map((c: { value?: string }) => c.value ?? '').join('');
-    return '';
-  }).join('');
+  return node.children
+    .map((child: { value?: string; children?: Array<{ value?: string }> }) => {
+      if (child.value) return child.value;
+      if (child.children)
+        return child.children
+          .map((c: { value?: string }) => c.value ?? '')
+          .join('');
+      return '';
+    })
+    .join('');
 }
 
 function splitAtParagraphBoundaries(content: string): string[] {
@@ -77,7 +84,10 @@ function splitAtParagraphBoundaries(content: string): string[] {
   return result;
 }
 
-export async function parseMarkdownFile(filePath: string, apiId: string): Promise<Chunk[]> {
+export async function parseMarkdownFile(
+  filePath: string,
+  apiId: string,
+): Promise<Chunk[]> {
   let source: string;
   try {
     source = await readFile(filePath, 'utf-8');
@@ -107,7 +117,14 @@ export async function parseMarkdownFile(filePath: string, apiId: string): Promis
   for (const node of (tree as { children: MdastNode[] }).children) {
     if (node.type === 'heading') {
       const depth = node.depth!;
-      const text = extractHeadingText(node as { children: Array<{ value?: string; children?: Array<{ value?: string }> }> });
+      const text = extractHeadingText(
+        node as {
+          children: Array<{
+            value?: string;
+            children?: Array<{ value?: string }>;
+          }>;
+        },
+      );
 
       if (depth === 1) {
         h1Title = text;
@@ -155,7 +172,9 @@ export async function parseMarkdownFile(filePath: string, apiId: string): Promis
   const chunks: Chunk[] = [];
 
   for (const section of sections) {
-    const content = source.slice(section.contentStart, section.contentEnd).trim();
+    const content = source
+      .slice(section.contentStart, section.contentEnd)
+      .trim();
     if (!content) continue;
 
     const title = section.headings[section.headings.length - 1];

@@ -1,0 +1,7 @@
+dist/
+node_modules/
+alexandria.db
+openspec/
+.claude/
+.github/prompts/
+.github/skills/

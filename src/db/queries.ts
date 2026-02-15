@@ -1,10 +1,17 @@
 import type Database from 'better-sqlite3';
-import type { Api, Chunk, ChunkType, SearchOptions, SearchResult } from '../shared/types.js';
+import type {
+  Api,
+  Chunk,
+  ChunkType,
+  SearchOptions,
+  SearchResult,
+} from '../shared/types.js';
 
 // --- APIs ---
 
 export function upsertApi(db: Database.Database, api: Api): void {
-  db.prepare(`
+  db.prepare(
+    `
     INSERT INTO apis (id, name, version, spec_path, docs_path)
     VALUES (@id, @name, @version, @specPath, @docsPath)
     ON CONFLICT(id) DO UPDATE SET
@@ -13,7 +20,8 @@ export function upsertApi(db: Database.Database, api: Api): void {
       spec_path = excluded.spec_path,
       docs_path = excluded.docs_path,
       updated_at = datetime('now')
-  `).run({
+  `,
+  ).run({
     id: api.id,
     name: api.name,
     version: api.version ?? null,
@@ -32,7 +40,7 @@ export function getApis(db: Database.Database): Api[] {
     created_at: string;
     updated_at: string;
   }>;
-  return rows.map(r => ({
+  return rows.map((r) => ({
     id: r.id,
     name: r.name,
     version: r.version ?? undefined,
@@ -45,11 +53,16 @@ export function getApis(db: Database.Database): Api[] {
 
 // --- Chunks ---
 
-export function upsertChunk(db: Database.Database, chunk: Chunk, embedding: Float32Array): void {
+export function upsertChunk(
+  db: Database.Database,
+  chunk: Chunk,
+  embedding: Float32Array,
+): void {
   const metadata = chunk.metadata ? JSON.stringify(chunk.metadata) : null;
   const txn = db.transaction(() => {
     // Upsert main chunk
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO chunks (id, api_id, type, title, content, content_hash, metadata)
       VALUES (@id, @apiId, @type, @title, @content, @contentHash, @metadata)
       ON CONFLICT(id) DO UPDATE SET
@@ -58,7 +71,8 @@ export function upsertChunk(db: Database.Database, chunk: Chunk, embedding: Floa
         content = excluded.content,
         content_hash = excluded.content_hash,
         metadata = excluded.metadata
-    `).run({
+    `,
+    ).run({
       id: chunk.id,
       apiId: chunk.apiId,
       type: chunk.type,
@@ -70,15 +84,15 @@ export function upsertChunk(db: Database.Database, chunk: Chunk, embedding: Floa
 
     // Sync FTS: delete old, insert new
     db.prepare('DELETE FROM chunks_fts WHERE chunk_id = ?').run(chunk.id);
-    db.prepare('INSERT INTO chunks_fts (chunk_id, title, content) VALUES (?, ?, ?)').run(
-      chunk.id, chunk.title, chunk.content,
-    );
+    db.prepare(
+      'INSERT INTO chunks_fts (chunk_id, title, content) VALUES (?, ?, ?)',
+    ).run(chunk.id, chunk.title, chunk.content);
 
     // Sync vec: delete old, insert new
     db.prepare('DELETE FROM chunks_vec WHERE chunk_id = ?').run(chunk.id);
-    db.prepare('INSERT INTO chunks_vec (chunk_id, embedding) VALUES (?, ?)').run(
-      chunk.id, embedding,
-    );
+    db.prepare(
+      'INSERT INTO chunks_vec (chunk_id, embedding) VALUES (?, ?)',
+    ).run(chunk.id, embedding);
   });
   txn();
 }
@@ -94,7 +108,9 @@ export function deleteChunk(db: Database.Database, chunkId: string): void {
 
 export function deleteChunksByApi(db: Database.Database, apiId: string): void {
   const txn = db.transaction(() => {
-    const chunkIds = db.prepare('SELECT id FROM chunks WHERE api_id = ?').all(apiId) as Array<{ id: string }>;
+    const chunkIds = db
+      .prepare('SELECT id FROM chunks WHERE api_id = ?')
+      .all(apiId) as Array<{ id: string }>;
     for (const { id } of chunkIds) {
       db.prepare('DELETE FROM chunks_vec WHERE chunk_id = ?').run(id);
       db.prepare('DELETE FROM chunks_fts WHERE chunk_id = ?').run(id);
@@ -136,24 +152,37 @@ function rowToChunk(r: Record<string, unknown>): Chunk {
   };
 }
 
-export function getChunksByApi(db: Database.Database, apiId: string, type?: ChunkType): Chunk[] {
+export function getChunksByApi(
+  db: Database.Database,
+  apiId: string,
+  type?: ChunkType,
+): Chunk[] {
   if (type) {
-    const rows = db.prepare('SELECT * FROM chunks WHERE api_id = ? AND type = ?').all(apiId, type);
+    const rows = db
+      .prepare('SELECT * FROM chunks WHERE api_id = ? AND type = ?')
+      .all(apiId, type);
     return (rows as Record<string, unknown>[]).map(rowToChunk);
   }
   const rows = db.prepare('SELECT * FROM chunks WHERE api_id = ?').all(apiId);
   return (rows as Record<string, unknown>[]).map(rowToChunk);
 }
 
-export function getChunkById(db: Database.Database, id: string): Chunk | undefined {
-  const row = db.prepare('SELECT * FROM chunks WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+export function getChunkById(
+  db: Database.Database,
+  id: string,
+): Chunk | undefined {
+  const row = db.prepare('SELECT * FROM chunks WHERE id = ?').get(id) as
+    | Record<string, unknown>
+    | undefined;
   return row ? rowToChunk(row) : undefined;
 }
 
 export function getChunksByIds(db: Database.Database, ids: string[]): Chunk[] {
   if (ids.length === 0) return [];
   const placeholders = ids.map(() => '?').join(',');
-  const rows = db.prepare(`SELECT * FROM chunks WHERE id IN (${placeholders})`).all(...ids);
+  const rows = db
+    .prepare(`SELECT * FROM chunks WHERE id IN (${placeholders})`)
+    .all(...ids);
   return (rows as Record<string, unknown>[]).map(rowToChunk);
 }
 
@@ -166,8 +195,14 @@ function sanitizeFtsQuery(query: string): string {
   return cleaned.split(/\s+/).filter(Boolean).map(t => `"${t}"`).join(' ');
 }
 
-interface FtsRow { chunk_id: string; rank: number }
-interface VecRow { chunk_id: string; distance: number }
+interface FtsRow {
+  chunk_id: string;
+  rank: number;
+}
+interface VecRow {
+  chunk_id: string;
+  distance: number;
+}
 
 function searchFts(
   db: Database.Database,
@@ -207,7 +242,7 @@ function searchFts(
   params.push(limit);
 
   const rows = db.prepare(sql).all(...params) as FtsRow[];
-  return rows.map(r => ({ chunkId: r.chunk_id, rank: r.rank }));
+  return rows.map((r) => ({ chunkId: r.chunk_id, rank: r.rank }));
 }
 
 function searchVec(
@@ -218,20 +253,27 @@ function searchVec(
   types?: ChunkType[],
 ): Array<{ chunkId: string; distance: number }> {
   // sqlite-vec KNN query — post-filter for apiId/types
-  const overFetch = (apiId || types?.length) ? limit * 5 : limit;
-  const vecRows = db.prepare(`
+  const overFetch = apiId || types?.length ? limit * 5 : limit;
+  const vecRows = db
+    .prepare(
+      `
     SELECT chunk_id, distance
     FROM chunks_vec
     WHERE embedding MATCH ?
       AND k = ?
     ORDER BY distance
-  `).all(queryEmbedding, overFetch) as VecRow[];
+  `,
+    )
+    .all(queryEmbedding, overFetch) as VecRow[];
 
-  let results = vecRows.map(r => ({ chunkId: r.chunk_id, distance: r.distance }));
+  let results = vecRows.map((r) => ({
+    chunkId: r.chunk_id,
+    distance: r.distance,
+  }));
 
   // Post-filter if needed
   if (apiId || types?.length) {
-    const chunkIds = results.map(r => r.chunkId);
+    const chunkIds = results.map((r) => r.chunkId);
     if (chunkIds.length === 0) return [];
     const placeholders = chunkIds.map(() => '?').join(',');
     let filterSql = `SELECT id FROM chunks WHERE id IN (${placeholders})`;
@@ -248,9 +290,11 @@ function searchVec(
     }
 
     const validIds = new Set(
-      (db.prepare(filterSql).all(...filterParams) as Array<{ id: string }>).map(r => r.id),
+      (db.prepare(filterSql).all(...filterParams) as Array<{ id: string }>).map(
+        (r) => r.id,
+      ),
     );
-    results = results.filter(r => validIds.has(r.chunkId));
+    results = results.filter((r) => validIds.has(r.chunkId));
   }
 
   return results.slice(0, limit);
@@ -267,8 +311,20 @@ export function searchHybrid(
   const limit = options.limit ?? 20;
   const overFetchLimit = limit * 3;
 
-  const ftsResults = searchFts(db, query, overFetchLimit, options.apiId, options.types);
-  const vecResults = searchVec(db, queryEmbedding, overFetchLimit, options.apiId, options.types);
+  const ftsResults = searchFts(
+    db,
+    query,
+    overFetchLimit,
+    options.apiId,
+    options.types,
+  );
+  const vecResults = searchVec(
+    db,
+    queryEmbedding,
+    overFetchLimit,
+    options.apiId,
+    options.types,
+  );
 
   // RRF fusion
   const scores = new Map<string, number>();
@@ -293,7 +349,7 @@ export function searchHybrid(
   // Fetch full chunk data
   const chunkIds = ranked.map(([id]) => id);
   const chunks = getChunksByIds(db, chunkIds);
-  const chunkMap = new Map(chunks.map(c => [c.id, c]));
+  const chunkMap = new Map(chunks.map((c) => [c.id, c]));
 
   return ranked
     .filter(([id]) => chunkMap.has(id))

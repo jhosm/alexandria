@@ -4,7 +4,7 @@ import { embedDocuments, embedQuery } from '../embedder.js';
 function makeResponse(embeddings: number[][]): Response {
   return new Response(
     JSON.stringify({
-      data: embeddings.map(e => ({ embedding: e })),
+      data: embeddings.map((e) => ({ embedding: e })),
     }),
     { status: 200, headers: { 'Content-Type': 'application/json' } },
   );
@@ -22,7 +22,10 @@ describe('embedder', () => {
 
   it('embedDocuments sends input_type "document" and returns vectors', async () => {
     const mockFetch = vi.fn().mockResolvedValue(
-      makeResponse([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]),
+      makeResponse([
+        [0.1, 0.2, 0.3],
+        [0.4, 0.5, 0.6],
+      ]),
     );
     vi.stubGlobal('fetch', mockFetch);
 
@@ -40,9 +43,9 @@ describe('embedder', () => {
   });
 
   it('embedQuery sends input_type "query" and returns a single vector', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(
-      makeResponse([[0.7, 0.8, 0.9]]),
-    );
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(makeResponse([[0.7, 0.8, 0.9]]));
     vi.stubGlobal('fetch', mockFetch);
 
     const result = await embedQuery('search term');
@@ -55,9 +58,14 @@ describe('embedder', () => {
   });
 
   it('splits inputs into batches of 128', async () => {
-    const mockFetch = vi.fn()
-      .mockResolvedValueOnce(makeResponse(Array.from({ length: 128 }, () => [0.1])))
-      .mockResolvedValueOnce(makeResponse(Array.from({ length: 72 }, () => [0.2])));
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse(Array.from({ length: 128 }, () => [0.1])),
+      )
+      .mockResolvedValueOnce(
+        makeResponse(Array.from({ length: 72 }, () => [0.2])),
+      );
     vi.stubGlobal('fetch', mockFetch);
 
     const texts = Array.from({ length: 200 }, (_, i) => `text-${i}`);
@@ -92,18 +100,25 @@ describe('embedder', () => {
   });
 
   it('throws on non-200 API response with status code', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(
-      new Response('rate limit exceeded', { status: 429 }),
-    );
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(new Response('rate limit exceeded', { status: 429 }));
     vi.stubGlobal('fetch', mockFetch);
 
-    await expect(embedDocuments(['test'])).rejects.toThrow('Voyage API error (429)');
+    await expect(embedDocuments(['test'])).rejects.toThrow(
+      'Voyage API error (429)',
+    );
   });
 
   it('rejects entirely when a mid-batch API call fails', async () => {
-    const mockFetch = vi.fn()
-      .mockResolvedValueOnce(makeResponse(Array.from({ length: 128 }, () => [0.1])))
-      .mockResolvedValueOnce(new Response('rate limit exceeded', { status: 429 }));
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse(Array.from({ length: 128 }, () => [0.1])),
+      )
+      .mockResolvedValueOnce(
+        new Response('rate limit exceeded', { status: 429 }),
+      );
     vi.stubGlobal('fetch', mockFetch);
 
     const texts = Array.from({ length: 200 }, (_, i) => `text-${i}`);
@@ -113,9 +128,7 @@ describe('embedder', () => {
   });
 
   it('throws when API returns wrong number of embeddings', async () => {
-    const mockFetch = vi.fn().mockResolvedValue(
-      makeResponse([[0.1, 0.2]]),
-    );
+    const mockFetch = vi.fn().mockResolvedValue(makeResponse([[0.1, 0.2]]));
     vi.stubGlobal('fetch', mockFetch);
 
     await expect(embedDocuments(['hello', 'world'])).rejects.toThrow(
@@ -125,10 +138,10 @@ describe('embedder', () => {
 
   it('throws when API returns empty embedding array', async () => {
     const mockFetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({ data: [{ embedding: [] }] }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ),
+      new Response(JSON.stringify({ data: [{ embedding: [] }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
     );
     vi.stubGlobal('fetch', mockFetch);
 
@@ -139,10 +152,10 @@ describe('embedder', () => {
 
   it('embedQuery throws when API returns empty data', async () => {
     const mockFetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({ data: [] }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ),
+      new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
     );
     vi.stubGlobal('fetch', mockFetch);
 
@@ -152,8 +165,14 @@ describe('embedder', () => {
   });
 
   it('returns Float32Array instances', async () => {
-    const mockFetch = vi.fn()
-      .mockResolvedValueOnce(makeResponse([[0.1, 0.2], [0.3, 0.4]]))
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse([
+          [0.1, 0.2],
+          [0.3, 0.4],
+        ]),
+      )
       .mockResolvedValueOnce(makeResponse([[0.5, 0.6]]));
     vi.stubGlobal('fetch', mockFetch);
 

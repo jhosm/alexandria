@@ -30,7 +30,9 @@ describe('parseMarkdownFile', () => {
   it('heading hierarchy is preserved in chunk titles', async () => {
     const chunks = await parseMarkdownFile(useCasesPath, apiId);
     // h3 "Creating a Payment Intent" is under h2 "Processing a Payment"
-    const subChunk = chunks.find(c => c.title === 'Creating a Payment Intent');
+    const subChunk = chunks.find(
+      (c) => c.title === 'Creating a Payment Intent',
+    );
     expect(subChunk).toBeDefined();
     const headings = subChunk!.metadata!.headings as string[];
     expect(headings).toEqual([
@@ -43,8 +45,10 @@ describe('parseMarkdownFile', () => {
   it('large sections are split at paragraph boundaries', async () => {
     const chunks = await parseMarkdownFile(useCasesPath, apiId);
     // The "Implementing Refunds" h2 section body exceeds 3000 chars and should be split
-    const refundChunks = chunks.filter(c =>
-      c.title === 'Implementing Refunds' && c.metadata?.chunkIndex !== undefined,
+    const refundChunks = chunks.filter(
+      (c) =>
+        c.title === 'Implementing Refunds' &&
+        c.metadata?.chunkIndex !== undefined,
     );
     expect(refundChunks.length).toBeGreaterThanOrEqual(2);
     for (const chunk of refundChunks) {
@@ -73,41 +77,48 @@ describe('parseMarkdownFile', () => {
     }
 
     // Split chunks should have chunkIndex
-    const splitChunks = chunks.filter(c => c.metadata?.chunkIndex !== undefined);
+    const splitChunks = chunks.filter(
+      (c) => c.metadata?.chunkIndex !== undefined,
+    );
     expect(splitChunks.length).toBeGreaterThan(0);
     for (const chunk of splitChunks) {
       expect(typeof chunk.metadata!.chunkIndex).toBe('number');
     }
 
     // Non-split chunks should not have chunkIndex
-    const normalChunks = chunks.filter(c => c.metadata?.chunkIndex === undefined);
+    const normalChunks = chunks.filter(
+      (c) => c.metadata?.chunkIndex === undefined,
+    );
     expect(normalChunks.length).toBeGreaterThan(0);
   });
 
   it('captures h1 body content as a chunk', async () => {
     const chunks = await parseMarkdownFile(glossaryPath, apiId);
-    const introChunk = chunks.find(c => c.title === 'Payments API Glossary');
+    const introChunk = chunks.find((c) => c.title === 'Payments API Glossary');
     expect(introChunk).toBeDefined();
     expect(introChunk!.content).toContain('Common terms and definitions');
   });
 
   it('preserves content after h4 headings within parent section', async () => {
     const tmpPath = resolve(fixturesDir, 'h4-temp-guide.md');
-    await writeFile(tmpPath, [
-      '# Guide',
-      '',
-      '## Section One',
-      '',
-      'Intro paragraph.',
-      '',
-      '#### Sub-detail',
-      '',
-      'This should not be lost.',
-      '',
-    ].join('\n'));
+    await writeFile(
+      tmpPath,
+      [
+        '# Guide',
+        '',
+        '## Section One',
+        '',
+        'Intro paragraph.',
+        '',
+        '#### Sub-detail',
+        '',
+        'This should not be lost.',
+        '',
+      ].join('\n'),
+    );
     try {
       const chunks = await parseMarkdownFile(tmpPath, apiId);
-      const section = chunks.find(c => c.title === 'Section One');
+      const section = chunks.find((c) => c.title === 'Section One');
       expect(section).toBeDefined();
       expect(section!.content).toContain('Sub-detail');
       expect(section!.content).toContain('This should not be lost.');
@@ -117,7 +128,9 @@ describe('parseMarkdownFile', () => {
   });
 
   it('throws with context when file does not exist', async () => {
-    await expect(parseMarkdownFile('/nonexistent.md', 'test-api')).rejects.toThrow(
+    await expect(
+      parseMarkdownFile('/nonexistent.md', 'test-api'),
+    ).rejects.toThrow(
       'Failed to read markdown file for "test-api" at /nonexistent.md',
     );
   });
@@ -125,7 +138,7 @@ describe('parseMarkdownFile', () => {
   it('chunk IDs follow the expected format', async () => {
     const chunks = await parseMarkdownFile(glossaryPath, apiId);
     // Non-split chunk: {apiId}:doc:{filename}:{heading-path}
-    const apiKeyChunk = chunks.find(c => c.title === 'API Key');
+    const apiKeyChunk = chunks.find((c) => c.title === 'API Key');
     expect(apiKeyChunk).toBeDefined();
     expect(apiKeyChunk!.id).toBe(
       'test-api:doc:sample-glossary:payments-api-glossary/api-key',
@@ -133,7 +146,9 @@ describe('parseMarkdownFile', () => {
 
     // Split chunks: {apiId}:doc:{filename}:{heading-path}:{chunkIndex}
     const useCaseChunks = await parseMarkdownFile(useCasesPath, apiId);
-    const splitChunks = useCaseChunks.filter(c => c.metadata?.chunkIndex !== undefined);
+    const splitChunks = useCaseChunks.filter(
+      (c) => c.metadata?.chunkIndex !== undefined,
+    );
     for (const chunk of splitChunks) {
       const idx = chunk.metadata!.chunkIndex as number;
       expect(chunk.id).toMatch(new RegExp(`:${idx}$`));

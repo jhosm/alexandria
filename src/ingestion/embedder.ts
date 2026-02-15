@@ -36,7 +36,11 @@ async function callVoyageApi(
 
   const json = await response.json();
 
-  if (!json.data || !Array.isArray(json.data) || json.data.length !== texts.length) {
+  if (
+    !json.data ||
+    !Array.isArray(json.data) ||
+    json.data.length !== texts.length
+  ) {
     throw new Error(
       `Voyage API returned unexpected response: expected ${texts.length} embeddings, got ${json.data?.length ?? 'no data field'}`,
     );

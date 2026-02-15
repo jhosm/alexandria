@@ -45,14 +45,20 @@ function makeChunk(id: string, overrides: Partial<Chunk> = {}): Chunk {
 describe('Database initialization', () => {
   let db: Database.Database;
 
-  beforeEach(() => { db = createTestDb(); });
-  afterEach(() => { db.close(); });
+  beforeEach(() => {
+    db = createTestDb();
+  });
+  afterEach(() => {
+    db.close();
+  });
 
   it('should create all four tables', () => {
-    const tables = db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
-    ).all() as Array<{ name: string }>;
-    const names = tables.map(t => t.name);
+    const tables = db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+      )
+      .all() as Array<{ name: string }>;
+    const names = tables.map((t) => t.name);
     expect(names).toContain('apis');
     expect(names).toContain('chunks');
     expect(names).toContain('chunks_fts');
@@ -74,8 +80,12 @@ describe('Database initialization', () => {
 describe('API CRUD', () => {
   let db: Database.Database;
 
-  beforeEach(() => { db = createTestDb(); });
-  afterEach(() => { db.close(); });
+  beforeEach(() => {
+    db = createTestDb();
+  });
+  afterEach(() => {
+    db.close();
+  });
 
   it('should insert and retrieve an API', () => {
     upsertApi(db, testApi);
@@ -103,7 +113,9 @@ describe('Chunk CRUD', () => {
     upsertApi(db, testApi);
     upsertApi(db, { id: 'api-users', name: 'Users API' });
   });
-  afterEach(() => { db.close(); });
+  afterEach(() => {
+    db.close();
+  });
 
   it('should upsert and retrieve a chunk', () => {
     const chunk = makeChunk('chunk-1');
@@ -119,7 +131,11 @@ describe('Chunk CRUD', () => {
     const chunk = makeChunk('chunk-1');
     upsertChunk(db, chunk, makeEmbedding(1));
 
-    const updated = { ...chunk, title: 'Updated title', contentHash: 'new-hash' };
+    const updated = {
+      ...chunk,
+      title: 'Updated title',
+      contentHash: 'new-hash',
+    };
     upsertChunk(db, updated, makeEmbedding(2));
 
     const result = getChunkById(db, 'chunk-1');
@@ -143,9 +159,15 @@ describe('Chunk CRUD', () => {
   it('should write to all three tables', () => {
     upsertChunk(db, makeChunk('chunk-1'), makeEmbedding(1));
 
-    const main = db.prepare('SELECT COUNT(*) as c FROM chunks').get() as { c: number };
-    const fts = db.prepare('SELECT COUNT(*) as c FROM chunks_fts').get() as { c: number };
-    const vec = db.prepare('SELECT COUNT(*) as c FROM chunks_vec').get() as { c: number };
+    const main = db.prepare('SELECT COUNT(*) as c FROM chunks').get() as {
+      c: number;
+    };
+    const fts = db.prepare('SELECT COUNT(*) as c FROM chunks_fts').get() as {
+      c: number;
+    };
+    const vec = db.prepare('SELECT COUNT(*) as c FROM chunks_vec').get() as {
+      c: number;
+    };
     expect(main.c).toBe(1);
     expect(fts.c).toBe(1);
     expect(vec.c).toBe(1);
@@ -156,8 +178,12 @@ describe('Chunk CRUD', () => {
     deleteChunk(db, 'chunk-1');
 
     expect(getChunkById(db, 'chunk-1')).toBeUndefined();
-    const fts = db.prepare('SELECT COUNT(*) as c FROM chunks_fts').get() as { c: number };
-    const vec = db.prepare('SELECT COUNT(*) as c FROM chunks_vec').get() as { c: number };
+    const fts = db.prepare('SELECT COUNT(*) as c FROM chunks_fts').get() as {
+      c: number;
+    };
+    const vec = db.prepare('SELECT COUNT(*) as c FROM chunks_vec').get() as {
+      c: number;
+    };
     expect(fts.c).toBe(0);
     expect(vec.c).toBe(0);
   });
@@ -169,8 +195,12 @@ describe('Chunk CRUD', () => {
 
     const chunks = getChunksByApi(db, 'api-payments');
     expect(chunks).toHaveLength(0);
-    const fts = db.prepare('SELECT COUNT(*) as c FROM chunks_fts').get() as { c: number };
-    const vec = db.prepare('SELECT COUNT(*) as c FROM chunks_vec').get() as { c: number };
+    const fts = db.prepare('SELECT COUNT(*) as c FROM chunks_fts').get() as {
+      c: number;
+    };
+    const vec = db.prepare('SELECT COUNT(*) as c FROM chunks_vec').get() as {
+      c: number;
+    };
     expect(fts.c).toBe(0);
     expect(vec.c).toBe(0);
   });
@@ -190,7 +220,11 @@ describe('Chunk CRUD', () => {
   });
 
   it('should filter chunks by type', () => {
-    upsertChunk(db, makeChunk('chunk-1', { type: 'endpoint' }), makeEmbedding(1));
+    upsertChunk(
+      db,
+      makeChunk('chunk-1', { type: 'endpoint' }),
+      makeEmbedding(1),
+    );
     upsertChunk(db, makeChunk('chunk-2', { type: 'schema' }), makeEmbedding(2));
 
     const endpoints = getChunksByApi(db, 'api-payments', 'endpoint');
@@ -220,7 +254,9 @@ describe('Chunk CRUD', () => {
   });
 
   it('should handle metadata as JSON', () => {
-    const chunk = makeChunk('chunk-1', { metadata: { method: 'POST', path: '/pay' } });
+    const chunk = makeChunk('chunk-1', {
+      metadata: { method: 'POST', path: '/pay' },
+    });
     upsertChunk(db, chunk, makeEmbedding(1));
 
     const result = getChunkById(db, 'chunk-1');
@@ -236,7 +272,9 @@ describe('Hybrid search', () => {
     upsertApi(db, testApi);
     upsertApi(db, { id: 'api-users', name: 'Users API' });
   });
-  afterEach(() => { db.close(); });
+  afterEach(() => {
+    db.close();
+  });
 
   it('should return empty results on an empty database', () => {
     const results = searchHybrid(db, 'anything', makeEmbedding(1));
@@ -245,15 +283,23 @@ describe('Hybrid search', () => {
 
   it('should return results from FTS and vector search', () => {
     // Insert chunks with distinct content for FTS matching
-    upsertChunk(db, makeChunk('chunk-auth', {
-      title: 'Authentication endpoint',
-      content: 'This endpoint handles user authentication and login',
-    }), makeEmbedding(1));
+    upsertChunk(
+      db,
+      makeChunk('chunk-auth', {
+        title: 'Authentication endpoint',
+        content: 'This endpoint handles user authentication and login',
+      }),
+      makeEmbedding(1),
+    );
 
-    upsertChunk(db, makeChunk('chunk-pay', {
-      title: 'Payment processing',
-      content: 'This endpoint handles payment processing and billing',
-    }), makeEmbedding(2));
+    upsertChunk(
+      db,
+      makeChunk('chunk-pay', {
+        title: 'Payment processing',
+        content: 'This endpoint handles payment processing and billing',
+      }),
+      makeEmbedding(2),
+    );
 
     // Search for "authentication" — should match FTS, and vector should return results too
     const results = searchHybrid(db, 'authentication', makeEmbedding(1));
@@ -265,22 +311,34 @@ describe('Hybrid search', () => {
 
   it('should boost chunks appearing in both sources', () => {
     // Chunk A: matches FTS for "payment" AND has similar embedding
-    upsertChunk(db, makeChunk('chunk-a', {
-      title: 'Payment gateway',
-      content: 'Process payment transactions',
-    }), makeEmbedding(10));
+    upsertChunk(
+      db,
+      makeChunk('chunk-a', {
+        title: 'Payment gateway',
+        content: 'Process payment transactions',
+      }),
+      makeEmbedding(10),
+    );
 
     // Chunk B: matches FTS for "payment" but different embedding
-    upsertChunk(db, makeChunk('chunk-b', {
-      title: 'Payment history',
-      content: 'View past payment records',
-    }), makeEmbedding(99));
+    upsertChunk(
+      db,
+      makeChunk('chunk-b', {
+        title: 'Payment history',
+        content: 'View past payment records',
+      }),
+      makeEmbedding(99),
+    );
 
     // Chunk C: no FTS match but similar embedding
-    upsertChunk(db, makeChunk('chunk-c', {
-      title: 'Transaction overview',
-      content: 'Overview of all transactions',
-    }), makeEmbedding(10.01));
+    upsertChunk(
+      db,
+      makeChunk('chunk-c', {
+        title: 'Transaction overview',
+        content: 'Overview of all transactions',
+      }),
+      makeEmbedding(10.01),
+    );
 
     const results = searchHybrid(db, 'payment', makeEmbedding(10));
     expect(results.length).toBeGreaterThan(0);
@@ -289,35 +347,71 @@ describe('Hybrid search', () => {
   });
 
   it('should filter by apiId', () => {
-    upsertChunk(db, makeChunk('chunk-pay-1', { apiId: 'api-payments' }), makeEmbedding(1));
-    upsertChunk(db, makeChunk('chunk-user-1', { apiId: 'api-users' }), makeEmbedding(2));
+    upsertChunk(
+      db,
+      makeChunk('chunk-pay-1', { apiId: 'api-payments' }),
+      makeEmbedding(1),
+    );
+    upsertChunk(
+      db,
+      makeChunk('chunk-user-1', { apiId: 'api-users' }),
+      makeEmbedding(2),
+    );
 
-    const results = searchHybrid(db, 'test chunk', makeEmbedding(1), { apiId: 'api-payments' });
-    expect(results.every(r => r.chunk.apiId === 'api-payments')).toBe(true);
+    const results = searchHybrid(db, 'test chunk', makeEmbedding(1), {
+      apiId: 'api-payments',
+    });
+    expect(results.every((r) => r.chunk.apiId === 'api-payments')).toBe(true);
   });
 
   it('should filter by chunk types', () => {
-    upsertChunk(db, makeChunk('chunk-ep', { type: 'endpoint' }), makeEmbedding(1));
-    upsertChunk(db, makeChunk('chunk-sc', { type: 'schema' }), makeEmbedding(2));
-    upsertChunk(db, makeChunk('chunk-ov', { type: 'overview' }), makeEmbedding(3));
+    upsertChunk(
+      db,
+      makeChunk('chunk-ep', { type: 'endpoint' }),
+      makeEmbedding(1),
+    );
+    upsertChunk(
+      db,
+      makeChunk('chunk-sc', { type: 'schema' }),
+      makeEmbedding(2),
+    );
+    upsertChunk(
+      db,
+      makeChunk('chunk-ov', { type: 'overview' }),
+      makeEmbedding(3),
+    );
 
-    const results = searchHybrid(db, 'test chunk', makeEmbedding(1), { types: ['endpoint', 'schema'] });
-    expect(results.every(r => ['endpoint', 'schema'].includes(r.chunk.type))).toBe(true);
+    const results = searchHybrid(db, 'test chunk', makeEmbedding(1), {
+      types: ['endpoint', 'schema'],
+    });
+    expect(
+      results.every((r) => ['endpoint', 'schema'].includes(r.chunk.type)),
+    ).toBe(true);
   });
 
   it('should respect custom limit', () => {
     for (let i = 0; i < 10; i++) {
-      upsertChunk(db, makeChunk(`chunk-${i}`, {
-        content: `Search result content number ${i}`,
-      }), makeEmbedding(i));
+      upsertChunk(
+        db,
+        makeChunk(`chunk-${i}`, {
+          content: `Search result content number ${i}`,
+        }),
+        makeEmbedding(i),
+      );
     }
 
-    const results = searchHybrid(db, 'search result', makeEmbedding(5), { limit: 3 });
+    const results = searchHybrid(db, 'search result', makeEmbedding(5), {
+      limit: 3,
+    });
     expect(results.length).toBeLessThanOrEqual(3);
   });
 
   it('should handle FTS special characters safely', () => {
-    upsertChunk(db, makeChunk('chunk-1', { content: 'user data' }), makeEmbedding(1));
+    upsertChunk(
+      db,
+      makeChunk('chunk-1', { content: 'user data' }),
+      makeEmbedding(1),
+    );
 
     // Should not throw even with special FTS chars
     const results = searchHybrid(db, "user's (data)", makeEmbedding(1));
@@ -334,9 +428,13 @@ describe('Hybrid search', () => {
   });
 
   it('should return full chunk data with score', () => {
-    upsertChunk(db, makeChunk('chunk-1', {
-      metadata: { method: 'GET' },
-    }), makeEmbedding(1));
+    upsertChunk(
+      db,
+      makeChunk('chunk-1', {
+        metadata: { method: 'GET' },
+      }),
+      makeEmbedding(1),
+    );
 
     const results = searchHybrid(db, 'test chunk', makeEmbedding(1));
     expect(results.length).toBeGreaterThan(0);
