@@ -1,0 +1,36 @@
+{
+  "name": "alexandria",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "API documentation search engine with hybrid vector + full-text search, served via MCP",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx --watch src/server/index.ts",
+    "dev:server": "tsx src/server/index.ts",
+    "ingest": "tsx src/ingestion/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@apidevtools/swagger-parser": "^10.1.1",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "better-sqlite3": "^11.8.1",
+    "commander": "^13.1.0",
+    "express": "^4.21.2",
+    "js-yaml": "^4.1.0",
+    "remark-parse": "^11.0.0",
+    "sqlite-vec": "^0.1.6",
+    "unified": "^11.0.5",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.13.4",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
