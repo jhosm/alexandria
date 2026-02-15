@@ -104,15 +104,34 @@ export function deleteChunksByApi(db: Database.Database, apiId: string): void {
   txn();
 }
 
+const CHUNK_TYPES = new Set<string>(['overview', 'endpoint', 'schema', 'glossary', 'use-case', 'guide']);
+
 function rowToChunk(r: Record<string, unknown>): Chunk {
+  const type = r.type as string;
+  if (!CHUNK_TYPES.has(type)) {
+    throw new Error(`Invalid chunk type "${type}" in chunk "${r.id}"`);
+  }
+
+  let metadata: Record<string, unknown> | undefined;
+  if (r.metadata) {
+    try {
+      metadata = JSON.parse(r.metadata as string);
+    } catch (e) {
+      throw new Error(
+        `Corrupted metadata JSON in chunk "${r.id}": ${(e as Error).message}`,
+        { cause: e },
+      );
+    }
+  }
+
   return {
     id: r.id as string,
     apiId: r.api_id as string,
-    type: r.type as ChunkType,
+    type: type as ChunkType,
     title: r.title as string,
     content: r.content as string,
     contentHash: r.content_hash as string,
-    metadata: r.metadata ? JSON.parse(r.metadata as string) : undefined,
+    metadata,
     createdAt: r.created_at as string | undefined,
   };
 }
@@ -141,7 +160,10 @@ export function getChunksByIds(db: Database.Database, ids: string[]): Chunk[] {
 // --- Hybrid Search ---
 
 function sanitizeFtsQuery(query: string): string {
-  return query.replace(/['"*()\-:^~@]/g, ' ').trim();
+  const cleaned = query.replace(/['"*()\-:^~@{}]/g, ' ').trim();
+  if (!cleaned) return '';
+  // Quote each token so FTS5 treats them as literals, not boolean operators
+  return cleaned.split(/\s+/).filter(Boolean).map(t => `"${t}"`).join(' ');
 }
 
 interface FtsRow { chunk_id: string; rank: number }

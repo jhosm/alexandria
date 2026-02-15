@@ -101,6 +101,7 @@ describe('Chunk CRUD', () => {
   beforeEach(() => {
     db = createTestDb();
     upsertApi(db, testApi);
+    upsertApi(db, { id: 'api-users', name: 'Users API' });
   });
   afterEach(() => { db.close(); });
 
@@ -123,6 +124,20 @@ describe('Chunk CRUD', () => {
 
     const result = getChunkById(db, 'chunk-1');
     expect(result!.title).toBe('Updated title');
+  });
+
+  it('should keep exactly one row in FTS and vec after re-upsert', () => {
+    const chunk = makeChunk('chunk-1');
+    upsertChunk(db, chunk, makeEmbedding(1));
+    upsertChunk(db, { ...chunk, title: 'Updated title' }, makeEmbedding(2));
+
+    const fts = db.prepare('SELECT COUNT(*) as c FROM chunks_fts').get() as { c: number };
+    const vec = db.prepare('SELECT COUNT(*) as c FROM chunks_vec').get() as { c: number };
+    expect(fts.c).toBe(1);
+    expect(vec.c).toBe(1);
+    // Verify FTS content is updated
+    const ftsRow = db.prepare('SELECT title FROM chunks_fts WHERE chunk_id = ?').get('chunk-1') as { title: string };
+    expect(ftsRow.title).toBe('Updated title');
   });
 
   it('should write to all three tables', () => {
@@ -160,6 +175,20 @@ describe('Chunk CRUD', () => {
     expect(vec.c).toBe(0);
   });
 
+  it('should not delete chunks from other APIs', () => {
+    upsertChunk(db, makeChunk('chunk-pay', { apiId: 'api-payments' }), makeEmbedding(1));
+    upsertChunk(db, makeChunk('chunk-user', { apiId: 'api-users' }), makeEmbedding(2));
+    deleteChunksByApi(db, 'api-payments');
+
+    const remaining = getChunksByApi(db, 'api-users');
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe('chunk-user');
+    const fts = db.prepare('SELECT COUNT(*) as c FROM chunks_fts').get() as { c: number };
+    const vec = db.prepare('SELECT COUNT(*) as c FROM chunks_vec').get() as { c: number };
+    expect(fts.c).toBe(1);
+    expect(vec.c).toBe(1);
+  });
+
   it('should filter chunks by type', () => {
     upsertChunk(db, makeChunk('chunk-1', { type: 'endpoint' }), makeEmbedding(1));
     upsertChunk(db, makeChunk('chunk-2', { type: 'schema' }), makeEmbedding(2));
@@ -176,6 +205,18 @@ describe('Chunk CRUD', () => {
 
     const results = getChunksByIds(db, ['chunk-1', 'chunk-3']);
     expect(results).toHaveLength(2);
+  });
+
+  it('should return only existing chunks when some IDs are missing', () => {
+    upsertChunk(db, makeChunk('chunk-1'), makeEmbedding(1));
+
+    const results = getChunksByIds(db, ['nonexistent', 'chunk-1', 'also-missing']);
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe('chunk-1');
+  });
+
+  it('should return empty for empty ID list', () => {
+    expect(getChunksByIds(db, [])).toHaveLength(0);
   });
 
   it('should handle metadata as JSON', () => {
@@ -196,6 +237,11 @@ describe('Hybrid search', () => {
     upsertApi(db, { id: 'api-users', name: 'Users API' });
   });
   afterEach(() => { db.close(); });
+
+  it('should return empty results on an empty database', () => {
+    const results = searchHybrid(db, 'anything', makeEmbedding(1));
+    expect(results).toHaveLength(0);
+  });
 
   it('should return results from FTS and vector search', () => {
     // Insert chunks with distinct content for FTS matching
