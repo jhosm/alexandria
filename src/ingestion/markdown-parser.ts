@@ -7,6 +7,13 @@ import type { Chunk, ChunkType } from '../shared/types.js';
 
 const MAX_CHUNK_SIZE = 3000;
 
+interface MdastNode {
+  type: string;
+  depth?: number;
+  position: { start: { offset: number }; end: { offset: number } };
+  children?: Array<{ value?: string; children?: Array<{ value?: string }> }>;
+}
+
 interface Section {
   headings: string[];
   contentStart: number;
@@ -55,7 +62,19 @@ function splitAtParagraphBoundaries(content: string): string[] {
     }
   }
   if (current) chunks.push(current);
-  return chunks;
+
+  // Hard-split any chunk that still exceeds MAX_CHUNK_SIZE (single giant paragraph)
+  const result: string[] = [];
+  for (const chunk of chunks) {
+    if (chunk.length <= MAX_CHUNK_SIZE) {
+      result.push(chunk);
+    } else {
+      for (let i = 0; i < chunk.length; i += MAX_CHUNK_SIZE) {
+        result.push(chunk.slice(i, i + MAX_CHUNK_SIZE));
+      }
+    }
+  }
+  return result;
 }
 
 export async function parseMarkdownFile(filePath: string, apiId: string): Promise<Chunk[]> {
@@ -78,7 +97,7 @@ export async function parseMarkdownFile(filePath: string, apiId: string): Promis
     currentSection = null;
   }
 
-  for (const node of (tree as { children: Array<{ type: string; depth?: number; position: { start: { offset: number }; end: { offset: number } }; children?: Array<{ value?: string; children?: Array<{ value?: string }> }> }> }).children) {
+  for (const node of (tree as { children: MdastNode[] }).children) {
     if (node.type === 'heading') {
       const depth = node.depth!;
       const text = extractHeadingText(node as { children: Array<{ value?: string; children?: Array<{ value?: string }> }> });
