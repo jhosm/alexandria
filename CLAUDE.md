@@ -25,8 +25,8 @@ src/
       types.ts             — EmbeddingProvider interface (dimension, embedDocuments, embedQuery)
       index.ts             — Provider singleton factory (reads EMBEDDING_PROVIDER env var)
       voyage.ts            — Voyage AI provider (voyage-3-lite, 1024d, 128/batch)
-      ollama.ts            — Ollama provider (nomic-embed-text, 768d)
-      transformers.ts      — HF Transformers provider (all-MiniLM-L6-v2, 384d, local)
+      ollama.ts            — Ollama provider (bge-large, 1024d)
+      transformers.ts      — HF Transformers provider (bge-large-en-v1.5, 1024d, local)
   server/
     index.ts               — MCP server over stdio (StdioServerTransport)
     format.ts              — Response formatters (API list, search results, endpoints)
@@ -62,12 +62,12 @@ VOYAGE_API_KEY=...                 # Required
 
 # Ollama (when EMBEDDING_PROVIDER=ollama)
 OLLAMA_URL=http://localhost:11434  # Optional, default shown
-OLLAMA_MODEL=nomic-embed-text     # Optional, default shown
-OLLAMA_DIMENSION=768               # Optional, default shown
+OLLAMA_MODEL=bge-large             # Optional, default shown
+OLLAMA_DIMENSION=1024              # Optional, default shown
 
 # Transformers (when EMBEDDING_PROVIDER=transformers)
-TRANSFORMERS_MODEL=Xenova/all-MiniLM-L6-v2  # Optional, default shown
-TRANSFORMERS_DIMENSION=384                    # Optional, default shown
+TRANSFORMERS_MODEL=Xenova/bge-large-en-v1.5  # Optional, default shown
+TRANSFORMERS_DIMENSION=1024                   # Optional, default shown
 ```
 
 ## Key Patterns
