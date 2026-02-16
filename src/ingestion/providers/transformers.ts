@@ -4,8 +4,8 @@ import {
 } from '@huggingface/transformers';
 import type { EmbeddingProvider } from './types.js';
 
-const DEFAULT_MODEL = 'Xenova/all-MiniLM-L6-v2';
-const DEFAULT_DIMENSION = 384;
+const DEFAULT_MODEL = 'Xenova/bge-large-en-v1.5';
+const DEFAULT_DIMENSION = 1024;
 
 export class TransformersProvider implements EmbeddingProvider {
   readonly dimension: number;
@@ -41,7 +41,7 @@ export class TransformersProvider implements EmbeddingProvider {
 
     let output: { tolist(): number[][] };
     try {
-      output = await pipe(texts, { pooling: 'mean', normalize: true });
+      output = await pipe(texts, { pooling: 'cls', normalize: true });
     } catch (error) {
       throw new Error(
         `Transformers inference failed: ${error instanceof Error ? error.message : error}`,

@@ -29,7 +29,7 @@ describe('OllamaProvider', () => {
     expect(mockFetch).toHaveBeenCalledOnce();
     expect(mockFetch.mock.calls[0][0]).toBe('http://localhost:11434/api/embed');
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.model).toBe('nomic-embed-text');
+    expect(body.model).toBe('bge-large');
     expect(body.input).toEqual(['hello', 'world']);
 
     expect(results).toHaveLength(2);
@@ -115,9 +115,9 @@ describe('OllamaProvider', () => {
     expect(provider.dimension).toBe(1536);
   });
 
-  it('defaults dimension to 768', () => {
+  it('defaults dimension to 1024', () => {
     const provider = new OllamaProvider();
-    expect(provider.dimension).toBe(768);
+    expect(provider.dimension).toBe(1024);
   });
 
   it('throws when API returns wrong number of embeddings', async () => {

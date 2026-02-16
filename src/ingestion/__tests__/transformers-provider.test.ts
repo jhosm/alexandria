@@ -45,10 +45,10 @@ describe('TransformersProvider', () => {
 
     expect(mockPipelineFn).toHaveBeenCalledWith(
       'feature-extraction',
-      'Xenova/all-MiniLM-L6-v2',
+      'Xenova/bge-large-en-v1.5',
     );
     expect(mockPipeline).toHaveBeenCalledWith(['hello', 'world'], {
-      pooling: 'mean',
+      pooling: 'cls',
       normalize: true,
     });
     expect(results).toHaveLength(2);
@@ -105,7 +105,7 @@ describe('TransformersProvider', () => {
     const provider = await createProvider();
 
     await expect(provider.embedDocuments(['test'])).rejects.toThrow(
-      'Failed to load Transformers model "Xenova/all-MiniLM-L6-v2": network timeout',
+      'Failed to load Transformers model "Xenova/bge-large-en-v1.5": network timeout',
     );
   });
 
@@ -131,9 +131,9 @@ describe('TransformersProvider', () => {
     expect(provider.dimension).toBe(768);
   });
 
-  it('defaults dimension to 384', async () => {
+  it('defaults dimension to 1024', async () => {
     const provider = await createProvider();
-    expect(provider.dimension).toBe(384);
+    expect(provider.dimension).toBe(1024);
   });
 
   it('throws descriptive error when inference fails', async () => {

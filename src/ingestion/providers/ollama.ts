@@ -1,8 +1,8 @@
 import type { EmbeddingProvider } from './types.js';
 
 const DEFAULT_URL = 'http://localhost:11434';
-const DEFAULT_MODEL = 'nomic-embed-text';
-const DEFAULT_DIMENSION = 768;
+const DEFAULT_MODEL = 'bge-large';
+const DEFAULT_DIMENSION = 1024;
 
 export class OllamaProvider implements EmbeddingProvider {
   readonly dimension: number;
