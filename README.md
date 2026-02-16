@@ -48,7 +48,47 @@ npm run ingest -- --api petstore --spec ./examples/petstore-openapi.yml --docs .
 npm run dev:server
 ```
 
-The server exposes search tools over stdio using the [Model Context Protocol](https://modelcontextprotocol.io/). Connect it to an MCP-compatible client (e.g., Claude Desktop) to query your indexed documentation.
+The server exposes search tools over stdio using the [Model Context Protocol](https://modelcontextprotocol.io/). Connect it to an MCP-compatible client to query your indexed documentation.
+
+### Configure MCP clients
+
+#### Claude Code
+
+Add to `.mcp.json` at the project root (or `~/.claude.json` for global access):
+
+```json
+{
+  "mcpServers": {
+    "alexandria": {
+      "command": "npx",
+      "args": ["tsx", "src/server/index.ts"],
+      "env": {
+        "VOYAGE_API_KEY": "your-key-here"
+      }
+    }
+  }
+}
+```
+
+#### Visual Studio Code
+
+Add to `.vscode/mcp.json` in the workspace root:
+
+```json
+{
+  "servers": {
+    "alexandria": {
+      "command": "npx",
+      "args": ["tsx", "src/server/index.ts"],
+      "env": {
+        "VOYAGE_API_KEY": "your-key-here"
+      }
+    }
+  }
+}
+```
+
+> **Note:** If using Ollama or Transformers.js, replace the `env` block with the appropriate provider settings from `.env.example` (e.g., `"EMBEDDING_PROVIDER": "ollama"`).
 
 ## Scripts
 
