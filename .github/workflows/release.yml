@@ -1,0 +1,85 @@
+name: Release mcpb bundles
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: macos-latest
+            platform: darwin
+            arch: arm64
+          - runner: ubuntu-latest
+            platform: linux
+            arch: x64
+          - runner: windows-latest
+            platform: win32
+            arch: x64
+
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - name: Build bundle (unix)
+        if: runner.os != 'Windows'
+        run: bash scripts/pack-mcpb.sh
+
+      - name: Build bundle (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          npx tsc
+
+          $version = node -p "require('./package.json').version"
+          $bundleName = "alexandria-$version-${{ matrix.platform }}-${{ matrix.arch }}.mcpb"
+          $staging = ".mcpb-staging"
+
+          if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
+          New-Item -ItemType Directory -Path $staging | Out-Null
+
+          Copy-Item -Recurse dist "$staging/dist"
+          Copy-Item package.json "$staging/package.json"
+          Copy-Item manifest.json "$staging/manifest.json"
+
+          Push-Location $staging
+          npm install --omit=dev --ignore-scripts=false
+          Pop-Location
+
+          New-Item -ItemType Directory -Path bundles -Force | Out-Null
+          Compress-Archive -Path "$staging/*" -DestinationPath "bundles/$bundleName"
+
+          Remove-Item -Recurse -Force $staging
+          Write-Output "Bundle created: bundles/$bundleName"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcpb-${{ matrix.platform }}-${{ matrix.arch }}
+          path: bundles/*.mcpb
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.mcpb
+          generate_release_notes: true

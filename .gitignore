@@ -138,6 +138,10 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
+# mcpb build artifacts
+.mcpb-staging/
+bundles/
+
 # Alexandria database
 alexandria.db
 alexandria.db-wal
