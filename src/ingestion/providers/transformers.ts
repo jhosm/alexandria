@@ -6,6 +6,8 @@ import type { EmbeddingProvider } from './types.js';
 
 const DEFAULT_MODEL = 'Xenova/bge-large-en-v1.5';
 const DEFAULT_DIMENSION = 1024;
+type Pooling = 'cls' | 'mean' | 'none';
+const DEFAULT_POOLING: Pooling = 'cls';
 
 export class TransformersProvider implements EmbeddingProvider {
   readonly dimension: number;
@@ -18,6 +20,10 @@ export class TransformersProvider implements EmbeddingProvider {
 
   private get model(): string {
     return process.env.TRANSFORMERS_MODEL || DEFAULT_MODEL;
+  }
+
+  private get pooling(): Pooling {
+    return (process.env.TRANSFORMERS_POOLING as Pooling) || DEFAULT_POOLING;
   }
 
   private async getPipeline(): Promise<FeatureExtractionPipeline> {
@@ -41,7 +47,7 @@ export class TransformersProvider implements EmbeddingProvider {
 
     let output: { tolist(): number[][] };
     try {
-      output = await pipe(texts, { pooling: 'cls', normalize: true });
+      output = await pipe(texts, { pooling: this.pooling, normalize: true });
     } catch (error) {
       throw new Error(
         `Transformers inference failed: ${error instanceof Error ? error.message : error}`,
