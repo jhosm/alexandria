@@ -30,7 +30,7 @@ beforeAll(async () => {
   // Ensure build is fresh — tests run against compiled JS
   const { execFileSync } = await import('node:child_process');
   execFileSync('npm', ['run', 'build'], { stdio: 'ignore', shell: true });
-}, 30_000);
+});
 
 describe('ingest CLI', () => {
   it('exits with error when no arguments provided', async () => {
