@@ -68,6 +68,7 @@ OLLAMA_DIMENSION=1024              # Optional, default shown
 # Transformers (when EMBEDDING_PROVIDER=transformers)
 TRANSFORMERS_MODEL=Xenova/bge-large-en-v1.5  # Optional, default shown
 TRANSFORMERS_DIMENSION=1024                   # Optional, default shown
+TRANSFORMERS_POOLING=cls                      # Optional, cls (BGE) or mean (MiniLM)
 ```
 
 ## Key Patterns

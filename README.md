@@ -126,6 +126,38 @@ Add to `.vscode/mcp.json` in the workspace root:
 | `npm run format`       | Prettier (write)                                                 |
 | `npm run format:check` | Prettier (check only)                                            |
 
+## Advanced
+
+### Custom embedding models
+
+The Ollama and Transformers providers can use any compatible embedding model. Set the model, dimension, and (for Transformers) pooling strategy via environment variables in `.env`:
+
+**Ollama** — any model from the [Ollama library](https://ollama.com/library) that supports embeddings:
+
+```bash
+OLLAMA_MODEL=bge-large           # default
+OLLAMA_DIMENSION=1024            # must match the model's output dimension
+```
+
+**Transformers.js** — any ONNX model from HuggingFace (typically under the `Xenova/` namespace):
+
+```bash
+TRANSFORMERS_MODEL=Xenova/bge-large-en-v1.5   # default
+TRANSFORMERS_DIMENSION=1024                    # must match the model's output dimension
+TRANSFORMERS_POOLING=cls                       # cls (BGE models) or mean (MiniLM, etc.)
+```
+
+Example — switching to MiniLM for a lighter local setup:
+
+```bash
+EMBEDDING_PROVIDER=transformers
+TRANSFORMERS_MODEL=Xenova/all-MiniLM-L6-v2
+TRANSFORMERS_DIMENSION=384
+TRANSFORMERS_POOLING=mean
+```
+
+After changing the model or provider, re-index: `npm run ingest -- --all`.
+
 ## Project Status
 
 | Phase                                                        | Status |

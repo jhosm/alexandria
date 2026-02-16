@@ -24,6 +24,7 @@ describe('TransformersProvider', () => {
       process.env.TRANSFORMERS_MODEL = originalModel;
     }
     delete process.env.TRANSFORMERS_DIMENSION;
+    delete process.env.TRANSFORMERS_POOLING;
   });
 
   async function createProvider() {
@@ -134,6 +135,22 @@ describe('TransformersProvider', () => {
   it('defaults dimension to 1024', async () => {
     const provider = await createProvider();
     expect(provider.dimension).toBe(1024);
+  });
+
+  it('uses TRANSFORMERS_POOLING env var when set', async () => {
+    process.env.TRANSFORMERS_POOLING = 'mean';
+    mockPipeline.mockResolvedValue({
+      tolist: () => [[0.1, 0.2, 0.3]],
+    });
+    mockPipelineFn.mockResolvedValue(mockPipeline);
+
+    const provider = await createProvider();
+    await provider.embedDocuments(['hello']);
+
+    expect(mockPipeline).toHaveBeenCalledWith(['hello'], {
+      pooling: 'mean',
+      normalize: true,
+    });
   });
 
   it('throws descriptive error when inference fails', async () => {

@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { writeFile, unlink } from 'node:fs/promises';
+import { writeFile, rm, mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { parseMarkdownFile } from '../markdown-parser.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -100,7 +101,8 @@ describe('parseMarkdownFile', () => {
   });
 
   it('preserves content after h4 headings within parent section', async () => {
-    const tmpPath = resolve(fixturesDir, 'h4-temp-guide.md');
+    const tmpDir = await mkdtemp(join(tmpdir(), 'alexandria-md-'));
+    const tmpPath = resolve(tmpDir, 'h4-temp-guide.md');
     await writeFile(
       tmpPath,
       [
@@ -123,7 +125,7 @@ describe('parseMarkdownFile', () => {
       expect(section!.content).toContain('Sub-detail');
       expect(section!.content).toContain('This should not be lost.');
     } finally {
-      await unlink(tmpPath);
+      await rm(tmpDir, { recursive: true, force: true });
     }
   });
 
