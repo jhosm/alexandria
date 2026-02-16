@@ -50,23 +50,35 @@ npm run dev:server
 
 The server exposes search tools over stdio using the [Model Context Protocol](https://modelcontextprotocol.io/). Connect it to an MCP-compatible client to query your indexed documentation.
 
-### Install via mcpb bundle
+### Configure MCP clients
 
-Alexandria ships a pre-built `.mcpb` bundle for MCP clients that support one-click installation (e.g., Claude Desktop). The bundle uses Transformers.js by default, so no API key is needed.
+#### Claude Desktop (one-click install)
 
-Build the bundle:
+Alexandria ships a `.mcpb` bundle for one-click installation in Claude Desktop. The bundle uses Transformers.js by default — no API key needed.
+
+Build the bundle (or download a pre-built one from [GitHub Releases](https://github.com/jhosm/alexandria/releases)):
 
 ```bash
 npm run pack
 ```
 
-This produces `bundles/alexandria-<version>-<platform>-<arch>.mcpb`. Open the file in a compatible client and it will prompt for optional configuration (embedding provider, Voyage API key, database path).
+This produces `bundles/alexandria-<version>-<platform>-<arch>.mcpb`. Install it using any of these methods:
 
-### Configure MCP clients manually
+1. **Double-click** the `.mcpb` file
+2. **Drag and drop** it into the Claude Desktop window
+3. **Menu**: Developer > Extensions > Install Extension, then select the file
+
+Claude Desktop will show the extension details and prompt for optional settings (embedding provider, Voyage API key, database path).
 
 #### Claude Code
 
-Add to `.mcp.json` at the project root (or `~/.claude.json` for global access):
+Run from the Alexandria project directory:
+
+```bash
+claude mcp add --transport stdio --env VOYAGE_API_KEY=your-key-here alexandria -- npx tsx src/server/index.ts
+```
+
+Or add to `.mcp.json` at the project root (or `~/.claude.json` for global access):
 
 ```json
 {
