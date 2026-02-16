@@ -89,8 +89,8 @@ Each step maps to an OpenSpec change in `openspec/changes/`. Completed changes a
 ✅ voyage-embedder       — Voyage AI provider
 ✅ ingestion-cli         — CLI pipeline wiring parsers + embedder
 ✅ embedding-providers   — Pluggable provider system (voyage, ollama, transformers)
-🔧 mcp-server           — MCP stdio server serving search tools (in progress)
-🔧 developer-onboarding — Onboarding docs/guides (in progress)
+✅ mcp-server           — MCP stdio server serving search tools
+✅ developer-onboarding — Onboarding docs/guides
 ```
 
 # General Guidelines
