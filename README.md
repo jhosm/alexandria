@@ -9,11 +9,13 @@ API documentation search engine. Indexes OpenAPI specs and markdown docs into SQ
 - [Node.js](https://nodejs.org/) 18 or later
 - npm
 
+> **No C/C++ build tools required.** Native dependencies (`better-sqlite3`, `sqlite-vec`) ship prebuilt binaries. If you don't have build tools, use `npm install --prefer-offline` to avoid fallback to source compilation.
+
 ## Quickstart
 
 ```bash
 git clone <repo-url> && cd alexandria
-npm install
+npm install --prefer-offline
 cp .env.example .env
 ```
 

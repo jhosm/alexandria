@@ -29,7 +29,7 @@ function run(
 beforeAll(async () => {
   // Ensure build is fresh — tests run against compiled JS
   const { execFileSync } = await import('node:child_process');
-  execFileSync('npm', ['run', 'build'], { stdio: 'ignore' });
+  execFileSync('npm', ['run', 'build'], { stdio: 'ignore', shell: true });
 });
 
 describe('ingest CLI', () => {
