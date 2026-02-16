@@ -8,7 +8,6 @@ API documentation search engine. Indexes OpenAPI specs and markdown docs into SQ
 
 - [Node.js](https://nodejs.org/) 18 or later
 - npm
-- A [Voyage AI](https://www.voyageai.com/) API key (free tier available) — or use a local provider (Ollama, Transformers.js)
 
 ## Quickstart
 
@@ -18,13 +17,9 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` and set your `VOYAGE_API_KEY`:
+The default configuration uses Transformers.js for embeddings — runs locally, no API key needed. No changes to `.env` are required to get started.
 
-```
-VOYAGE_API_KEY=your-key-here
-```
-
-> **Alternative providers:** Set `EMBEDDING_PROVIDER=ollama` or `EMBEDDING_PROVIDER=transformers` to avoid needing a Voyage AI key. See `.env.example` for configuration options.
+> **Voyage AI:** For higher-quality embeddings, set `EMBEDDING_PROVIDER=voyage` and `VOYAGE_API_KEY=your-key` in `.env`. A free tier is available at [voyageai.com](https://www.voyageai.com/). Switching providers requires re-indexing.
 
 ## Usage
 
@@ -86,6 +81,7 @@ Or add to `.mcp.json` at the project root (or `~/.claude.json` for global access
     "alexandria": {
       "command": "npx",
       "args": ["tsx", "src/server/index.ts"],
+      "cwd": "/absolute/path/to/alexandria",
       "env": {
         "EMBEDDING_PROVIDER": "transformers"
       }
@@ -104,6 +100,7 @@ Add to `.vscode/mcp.json` in the workspace root:
     "alexandria": {
       "command": "npx",
       "args": ["tsx", "src/server/index.ts"],
+      "cwd": "/absolute/path/to/alexandria",
       "env": {
         "EMBEDDING_PROVIDER": "transformers"
       }
@@ -112,21 +109,22 @@ Add to `.vscode/mcp.json` in the workspace root:
 }
 ```
 
-> **Note:** To use Voyage AI instead, replace `"EMBEDDING_PROVIDER": "transformers"` with `"VOYAGE_API_KEY": "your-key-here"`. See `.env.example` for all provider options.
+> **Note:** Replace `/absolute/path/to/alexandria` with the actual path to your Alexandria checkout. To use Voyage AI instead, set `"EMBEDDING_PROVIDER": "voyage"` and add `"VOYAGE_API_KEY": "your-key-here"`. The embedding provider must match the one used during ingestion.
 
 ## Scripts
 
-| Script                 | Description              |
-| ---------------------- | ------------------------ |
-| `npm run build`        | Compile TypeScript       |
-| `npm run dev`          | Dev mode with watch      |
-| `npm run dev:server`   | Start MCP server (stdio) |
-| `npm run ingest`       | Index API documentation  |
-| `npm test`             | Run tests (Vitest)       |
-| `npm run test:watch`   | Run tests in watch mode  |
-| `npm run lint`         | ESLint                   |
-| `npm run format`       | Prettier (write)         |
-| `npm run format:check` | Prettier (check only)    |
+| Script                 | Description                                                      |
+| ---------------------- | ---------------------------------------------------------------- |
+| `npm run build`        | Compile TypeScript (not needed for dev — `tsx` runs TS directly) |
+| `npm run dev`          | Start MCP server with file watching                              |
+| `npm run dev:server`   | Start MCP server (stdio)                                         |
+| `npm run ingest`       | Index API documentation                                          |
+| `npm run pack`         | Build `.mcpb` bundle for Claude Desktop                          |
+| `npm test`             | Run tests (Vitest)                                               |
+| `npm run test:watch`   | Run tests in watch mode                                          |
+| `npm run lint`         | ESLint                                                           |
+| `npm run format`       | Prettier (write)                                                 |
+| `npm run format:check` | Prettier (check only)                                            |
 
 ## Project Status
 
