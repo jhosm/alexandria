@@ -75,7 +75,7 @@ Claude Desktop will show the extension details and prompt for optional settings 
 Run from the Alexandria project directory:
 
 ```bash
-claude mcp add --transport stdio --env VOYAGE_API_KEY=your-key-here alexandria -- npx tsx src/server/index.ts
+claude mcp add --transport stdio --env EMBEDDING_PROVIDER=transformers alexandria -- npx tsx src/server/index.ts
 ```
 
 Or add to `.mcp.json` at the project root (or `~/.claude.json` for global access):
@@ -87,7 +87,7 @@ Or add to `.mcp.json` at the project root (or `~/.claude.json` for global access
       "command": "npx",
       "args": ["tsx", "src/server/index.ts"],
       "env": {
-        "VOYAGE_API_KEY": "your-key-here"
+        "EMBEDDING_PROVIDER": "transformers"
       }
     }
   }
@@ -105,14 +105,14 @@ Add to `.vscode/mcp.json` in the workspace root:
       "command": "npx",
       "args": ["tsx", "src/server/index.ts"],
       "env": {
-        "VOYAGE_API_KEY": "your-key-here"
+        "EMBEDDING_PROVIDER": "transformers"
       }
     }
   }
 }
 ```
 
-> **Note:** If using Ollama or Transformers.js, replace the `env` block with the appropriate provider settings from `.env.example` (e.g., `"EMBEDDING_PROVIDER": "ollama"`).
+> **Note:** To use Voyage AI instead, replace `"EMBEDDING_PROVIDER": "transformers"` with `"VOYAGE_API_KEY": "your-key-here"`. See `.env.example` for all provider options.
 
 ## Scripts
 
