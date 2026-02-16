@@ -50,7 +50,19 @@ npm run dev:server
 
 The server exposes search tools over stdio using the [Model Context Protocol](https://modelcontextprotocol.io/). Connect it to an MCP-compatible client to query your indexed documentation.
 
-### Configure MCP clients
+### Install via mcpb bundle
+
+Alexandria ships a pre-built `.mcpb` bundle for MCP clients that support one-click installation (e.g., Claude Desktop). The bundle uses Transformers.js by default, so no API key is needed.
+
+Build the bundle:
+
+```bash
+npm run pack
+```
+
+This produces `bundles/alexandria-<version>-<platform>-<arch>.mcpb`. Open the file in a compatible client and it will prompt for optional configuration (embedding provider, Voyage API key, database path).
+
+### Configure MCP clients manually
 
 #### Claude Code
 
