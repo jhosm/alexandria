@@ -1,0 +1,70 @@
+{
+  "manifest_version": "0.3",
+  "name": "alexandria",
+  "display_name": "Alexandria",
+  "version": "0.1.0",
+  "description": "API documentation search engine with hybrid vector + full-text search. Index OpenAPI specs and markdown docs, then search them via MCP.",
+  "author": {
+    "name": "Joao Miranda"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joaomiranda/alexandria.git"
+  },
+  "license": "MIT",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/server/index.js"],
+      "env": {
+        "EMBEDDING_PROVIDER": "${user_config.embedding_provider}",
+        "VOYAGE_API_KEY": "${user_config.voyage_api_key}",
+        "ALEXANDRIA_DB_PATH": "${user_config.db_path}"
+      }
+    }
+  },
+  "user_config": {
+    "embedding_provider": {
+      "type": "string",
+      "title": "Embedding Provider",
+      "description": "Which embedding provider to use: voyage, ollama, or transformers (default: transformers — works offline, no API key needed)",
+      "required": false,
+      "default": "transformers"
+    },
+    "voyage_api_key": {
+      "type": "string",
+      "title": "Voyage AI API Key",
+      "description": "API key for Voyage AI embeddings (only needed if embedding provider is set to voyage)",
+      "sensitive": true,
+      "required": false
+    },
+    "db_path": {
+      "type": "string",
+      "title": "Database Path",
+      "description": "Path to the SQLite database file (defaults to alexandria.db in the bundle directory)",
+      "required": false
+    }
+  },
+  "tools": [
+    {
+      "name": "list-apis",
+      "description": "List all indexed API documentation sources with their names and versions"
+    },
+    {
+      "name": "search-docs",
+      "description": "Search indexed API documentation using natural language. Returns relevant chunks ranked by hybrid search (vector + full-text)."
+    },
+    {
+      "name": "get-api-endpoints",
+      "description": "List all endpoints for a specific API, showing HTTP method, path, and summary"
+    }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  }
+}
