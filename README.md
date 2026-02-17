@@ -25,7 +25,7 @@ The default configuration uses Transformers.js for embeddings — runs locally, 
 
 ### Ingest documentation
 
-Index the bundled example API (configured in `apis.yml`):
+Index the bundled example API (configured in the registry file `apis.yml`):
 
 ```bash
 npm run ingest -- --all
@@ -125,6 +125,50 @@ Add to `.vscode/mcp.json` in the workspace root:
 | `npm run lint`         | ESLint                                                           |
 | `npm run format`       | Prettier (write)                                                 |
 | `npm run format:check` | Prettier (check only)                                            |
+
+## Using your own API docs
+
+Alexandria is organization-agnostic. The core engine is separate from the data it indexes — your registry file (`apis.yml`), OpenAPI specs, markdown docs, and the SQLite database are all configurable.
+
+To index your own APIs, create a directory with your data:
+
+```
+my-org-docs/
+  apis.yml              # registry listing your APIs
+  specs/
+    service-a.yaml
+    service-b.yaml
+  docs/
+    service-a/
+      getting-started.md
+    service-b/
+      overview.md
+```
+
+Your `apis.yml` references specs and docs with paths relative to itself:
+
+```yaml
+apis:
+  - name: service-a
+    spec: ./specs/service-a.yaml
+    docs: ./docs/service-a
+  - name: service-b
+    spec: ./specs/service-b.yaml
+    docs: ./docs/service-b
+```
+
+Point Alexandria at your data using `--registry` or environment variables:
+
+```bash
+# Via CLI flag
+npm run ingest -- --all --registry ./my-org-docs/apis.yml
+
+# Via environment variables (in .env or shell)
+ALEXANDRIA_REGISTRY_PATH=./my-org-docs/apis.yml
+ALEXANDRIA_DB_PATH=./my-org-docs/alexandria.db
+```
+
+This keeps your org data in a separate directory (or even a separate repo) from the Alexandria codebase.
 
 ## Advanced
 

@@ -115,14 +115,17 @@ export interface CliOptions {
   spec?: string;
   docs?: string;
   all?: boolean;
+  registry?: string;
 }
 
 export async function runCli(opts: CliOptions): Promise<void> {
   try {
     if (opts.all) {
-      const registryPath = resolve('apis.yml');
+      const registryPath = resolve(
+        opts.registry ?? process.env.ALEXANDRIA_REGISTRY_PATH ?? 'apis.yml',
+      );
       if (!existsSync(registryPath)) {
-        throw new CliError('apis.yml not found');
+        throw new CliError(`registry not found: ${registryPath}`);
       }
       const entries = loadRegistry(registryPath);
       const results: IngestResult[] = [];
@@ -186,7 +189,8 @@ program
   .option('--api <name>', 'API name')
   .option('--spec <path>', 'Path to OpenAPI spec file')
   .option('--docs <dir>', 'Path to markdown docs directory')
-  .option('--all', 'Ingest all APIs from apis.yml')
+  .option('--all', 'Ingest all APIs from registry')
+  .option('--registry <path>', 'Path to registry file (default: apis.yml)')
   .action(runCli);
 
 const isMain =

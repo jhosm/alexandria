@@ -94,16 +94,39 @@ describe('runCli', () => {
     );
   });
 
-  it('throws CliError when --all is used without apis.yml', async () => {
+  it('throws CliError when --all is used without registry file', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'alexandria-runcli-'));
     const origCwd = process.cwd();
     try {
       process.chdir(tmpDir);
-      await expect(runCli({ all: true })).rejects.toThrow('apis.yml not found');
+      await expect(runCli({ all: true })).rejects.toThrow('registry not found');
       await expect(runCli({ all: true })).rejects.toBeInstanceOf(CliError);
       expect(closeDb).toHaveBeenCalled();
     } finally {
       process.chdir(origCwd);
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('--all uses --registry path when provided', async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'alexandria-runcli-'));
+    try {
+      const fixtures = import.meta.dirname + '/fixtures';
+      const registryFile = join(tmpDir, 'custom-registry.yml');
+      writeFileSync(
+        registryFile,
+        `apis:\n  - name: pets\n    spec: ${fixtures}/sample-openapi.yaml\n`,
+      );
+
+      vi.mocked(parseOpenApiSpec).mockImplementation(async (_path, apiId) => [
+        makeChunk('e1', apiId),
+      ]);
+
+      await runCli({ all: true, registry: registryFile });
+
+      expect(logSpy).toHaveBeenCalledWith('Ingesting pets...');
+      expect(closeDb).toHaveBeenCalled();
+    } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });
