@@ -18,6 +18,7 @@ const staged = execSync('git diff --cached --name-only --diff-filter=ACM', {
 if (staged) {
   const files = staged
     .split('\n')
+    .filter(Boolean)
     .map((f) => JSON.stringify(f))
     .join(' ');
   run('Running format check', `npx prettier --check --ignore-unknown ${files}`);
