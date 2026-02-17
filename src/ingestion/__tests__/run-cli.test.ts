@@ -25,7 +25,7 @@ vi.mock('../../db/index.js', async (importOriginal) => {
   };
 });
 
-import { runCli, CliError } from '../index.js';
+import { runCli, CliError, computeSourceHash } from '../index.js';
 import { parseOpenApiSpec } from '../openapi-parser.js';
 import { parseMarkdownFile } from '../markdown-parser.js';
 import { embedDocuments } from '../embedder.js';
@@ -141,8 +141,11 @@ describe('runCli', () => {
 
     expect(logSpy).toHaveBeenCalledWith('Ingesting testapi...');
     expect(logSpy).toHaveBeenCalledWith(
-      '  1 chunks: 1 embedded, 0 skipped, 0 deleted',
+      expect.stringMatching(
+        /^\s+1 chunks: 1 embedded, 0 skipped, 0 deleted \(\d/,
+      ),
     );
+    expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(/^Done in \d/));
     expect(closeDb).toHaveBeenCalled();
   });
 
@@ -164,7 +167,9 @@ describe('runCli', () => {
 
     expect(logSpy).toHaveBeenCalledWith('Ingesting testapi...');
     expect(logSpy).toHaveBeenCalledWith(
-      '  3 chunks: 3 embedded, 0 skipped, 0 deleted',
+      expect.stringMatching(
+        /^\s+3 chunks: 3 embedded, 0 skipped, 0 deleted \(\d/,
+      ),
     );
   });
 
@@ -202,7 +207,9 @@ describe('runCli', () => {
 
       expect(logSpy).toHaveBeenCalledWith('Ingesting pets...');
       expect(logSpy).toHaveBeenCalledWith(
-        '  2 chunks: 2 embedded, 0 skipped, 0 deleted',
+        expect.stringMatching(
+          /^\s+2 chunks: 2 embedded, 0 skipped, 0 deleted \(\d/,
+        ),
       );
       // Summary line
       const summaryCalls = logSpy.mock.calls.map((c) => c[0]);
@@ -240,13 +247,15 @@ describe('runCli', () => {
     const origCwd = process.cwd();
     try {
       const fixtures = import.meta.dirname + '/fixtures';
+      // Create a real spec file so computeSourceHash can read it
+      writeFileSync(join(tmpDir, 'bad-spec.yaml'), 'openapi: "3.0.0"');
       writeFileSync(
         join(tmpDir, 'apis.yml'),
-        `apis:\n  - name: good\n    spec: ${fixtures}/sample-openapi.yaml\n  - name: bad\n    spec: ./nonexistent.yaml\n`,
+        `apis:\n  - name: good\n    spec: ${fixtures}/sample-openapi.yaml\n  - name: bad\n    spec: ./bad-spec.yaml\n`,
       );
 
       vi.mocked(parseOpenApiSpec).mockImplementation(async (path, apiId) => {
-        if (path.includes('nonexistent')) throw new Error('file not found');
+        if (path.includes('bad-spec')) throw new Error('file not found');
         return [makeChunk('c1', apiId)];
       });
 
@@ -256,7 +265,9 @@ describe('runCli', () => {
       // Good API succeeds
       expect(logSpy).toHaveBeenCalledWith('Ingesting good...');
       expect(logSpy).toHaveBeenCalledWith(
-        '  1 chunks: 1 embedded, 0 skipped, 0 deleted',
+        expect.stringMatching(
+          /^\s+1 chunks: 1 embedded, 0 skipped, 0 deleted \(\d/,
+        ),
       );
       // Bad API fails but doesn't stop
       expect(errorSpy).toHaveBeenCalledWith(
@@ -401,6 +412,145 @@ describe('runCli', () => {
       expect(closeDb).toHaveBeenCalled();
     } finally {
       process.chdir(origCwd);
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('skips unchanged API on second ingestion', async () => {
+    vi.mocked(parseOpenApiSpec).mockImplementation(async (_path, apiId) => [
+      makeChunk('c1', apiId),
+    ]);
+
+    const fixtures = import.meta.dirname + '/fixtures';
+    await runCli({ api: 'testapi', spec: fixtures + '/sample-openapi.yaml' });
+
+    logSpy.mockClear();
+    await runCli({ api: 'testapi', spec: fixtures + '/sample-openapi.yaml' });
+
+    expect(logSpy).toHaveBeenCalledWith('  unchanged, skipping');
+    // parseOpenApiSpec should NOT have been called the second time
+    expect(parseOpenApiSpec).toHaveBeenCalledTimes(1);
+  });
+
+  it('--force bypasses source hash skip', async () => {
+    vi.mocked(parseOpenApiSpec).mockImplementation(async (_path, apiId) => [
+      makeChunk('c1', apiId),
+    ]);
+
+    const fixtures = import.meta.dirname + '/fixtures';
+    await runCli({ api: 'testapi', spec: fixtures + '/sample-openapi.yaml' });
+
+    logSpy.mockClear();
+    vi.mocked(parseOpenApiSpec).mockClear();
+    await runCli({
+      api: 'testapi',
+      spec: fixtures + '/sample-openapi.yaml',
+      force: true,
+    });
+
+    expect(parseOpenApiSpec).toHaveBeenCalledTimes(1);
+    expect(logSpy).not.toHaveBeenCalledWith('  unchanged, skipping');
+  });
+
+  it('re-ingests when source file changes', async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'alexandria-runcli-'));
+    try {
+      const specPath = join(tmpDir, 'spec.yaml');
+      writeFileSync(
+        specPath,
+        'openapi: "3.0.0"\ninfo:\n  title: Test\n  version: "1.0"\npaths: {}',
+      );
+
+      vi.mocked(parseOpenApiSpec).mockImplementation(async (_path, apiId) => [
+        makeChunk('c1', apiId),
+      ]);
+
+      await runCli({ api: 'testapi', spec: specPath });
+
+      // Modify spec file
+      writeFileSync(
+        specPath,
+        'openapi: "3.0.0"\ninfo:\n  title: Test v2\n  version: "2.0"\npaths: {}',
+      );
+
+      logSpy.mockClear();
+      vi.mocked(parseOpenApiSpec).mockClear();
+      await runCli({ api: 'testapi', spec: specPath });
+
+      // Should have re-parsed since spec changed
+      expect(parseOpenApiSpec).toHaveBeenCalledTimes(1);
+      expect(logSpy).not.toHaveBeenCalledWith('  unchanged, skipping');
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('--all summary includes unchanged count', async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'alexandria-runcli-'));
+    const origCwd = process.cwd();
+    try {
+      const fixtures = import.meta.dirname + '/fixtures';
+      writeFileSync(
+        join(tmpDir, 'apis.yml'),
+        `apis:\n  - name: pets\n    spec: ${fixtures}/sample-openapi.yaml\n`,
+      );
+
+      vi.mocked(parseOpenApiSpec).mockImplementation(async (_path, apiId) => [
+        makeChunk('e1', apiId),
+      ]);
+
+      process.chdir(tmpDir);
+      // First run — ingests
+      await runCli({ all: true });
+
+      logSpy.mockClear();
+      // Second run — should skip
+      await runCli({ all: true });
+
+      const summaryCalls = logSpy.mock.calls.map((c) => c[0]);
+      expect(summaryCalls.some((s: string) => s.includes('1 unchanged'))).toBe(
+        true,
+      );
+    } finally {
+      process.chdir(origCwd);
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('computeSourceHash', () => {
+  it('returns consistent hash for same content', () => {
+    const fixtures = import.meta.dirname + '/fixtures';
+    const hash1 = computeSourceHash(fixtures + '/sample-openapi.yaml');
+    const hash2 = computeSourceHash(fixtures + '/sample-openapi.yaml');
+    expect(hash1).toBe(hash2);
+    expect(hash1).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('includes docs in hash', () => {
+    const fixtures = import.meta.dirname + '/fixtures';
+    const hashWithoutDocs = computeSourceHash(
+      fixtures + '/sample-openapi.yaml',
+    );
+    const hashWithDocs = computeSourceHash(
+      fixtures + '/sample-openapi.yaml',
+      fixtures,
+    );
+    expect(hashWithoutDocs).not.toBe(hashWithDocs);
+  });
+
+  it('changes when file content changes', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'alexandria-hash-'));
+    try {
+      const specPath = join(tmpDir, 'spec.yaml');
+      writeFileSync(specPath, 'version: 1');
+      const hash1 = computeSourceHash(specPath);
+
+      writeFileSync(specPath, 'version: 2');
+      const hash2 = computeSourceHash(specPath);
+
+      expect(hash1).not.toBe(hash2);
+    } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }
   });

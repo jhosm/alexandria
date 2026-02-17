@@ -31,6 +31,7 @@ export interface Api {
   version?: string;
   specPath?: string;
   docsPath?: string;
+  sourceHash?: string;
   createdAt?: string;
   updatedAt?: string;
 }

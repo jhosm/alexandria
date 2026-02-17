@@ -145,6 +145,8 @@ describe('ingestApi', () => {
     const result = await ingestApi(
       'testapi',
       FIXTURES_DIR + '/sample-openapi.yaml',
+      undefined,
+      { force: true },
     );
 
     expect(result.embedded).toBe(0);
@@ -176,6 +178,8 @@ describe('ingestApi', () => {
     const result = await ingestApi(
       'testapi',
       FIXTURES_DIR + '/sample-openapi.yaml',
+      undefined,
+      { force: true },
     );
 
     expect(result.embedded).toBe(1);
@@ -201,6 +205,8 @@ describe('ingestApi', () => {
     const result = await ingestApi(
       'testapi',
       FIXTURES_DIR + '/sample-openapi.yaml',
+      undefined,
+      { force: true },
     );
 
     expect(result.deleted).toBe(1);
@@ -325,6 +331,7 @@ describe('ingestion pipeline verification', () => {
       'petstore',
       FIXTURES_DIR + '/sample-openapi.yaml',
       FIXTURES_DIR,
+      { force: true },
     );
 
     expect(r2.total).toBe(5);
@@ -350,6 +357,7 @@ describe('ingestion pipeline verification', () => {
       'petstore',
       FIXTURES_DIR + '/sample-openapi.yaml',
       FIXTURES_DIR,
+      { force: true },
     );
 
     expect(r3.total).toBe(4);
@@ -428,7 +436,7 @@ describe('ingestDocs', () => {
       return [];
     });
 
-    const result = await ingestDocs('arch', FIXTURES_DIR);
+    const result = await ingestDocs('arch', FIXTURES_DIR, { force: true });
 
     expect(result.deleted).toBe(1);
     expect(getChunksByApi(db, apiId)).toHaveLength(1);
@@ -453,7 +461,7 @@ describe('ingestDocs', () => {
     });
     vi.mocked(embedDocuments).mockClear();
 
-    const result = await ingestDocs('arch', FIXTURES_DIR);
+    const result = await ingestDocs('arch', FIXTURES_DIR, { force: true });
 
     expect(result.embedded).toBe(0);
     expect(result.skipped).toBe(2);
