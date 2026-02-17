@@ -6,6 +6,7 @@ LLM agents using Alexandria need to understand the architecture — the patterns
 
 - New `docs` section in `apis.yml` for standalone documentation collections (design patterns, component docs, etc.)
 - Registry loader and ingestion pipeline extended to handle docs-only entries (no OpenAPI spec)
+- Existing `search-docs` tool renamed to `search-api-docs` with description clarified to guide agents toward API-specific searches (endpoints, schemas, API behaviour)
 - New MCP tool `search-arch-docs` with a rich description that guides agents to use it when understanding the architecture, writing code to expose an API, or writing code to consume an API
 
 ## Capabilities
@@ -18,10 +19,11 @@ LLM agents using Alexandria need to understand the architecture — the patterns
 ### Modified Capabilities
 
 - `ingestion-pipeline`: Extended to support entries without an OpenAPI spec — markdown-only ingestion for docs entries.
+- `search-api-docs-tool`: Renamed from `search-docs` to `search-api-docs`. Description updated to clarify it should be used for searching API-specific documentation — endpoints, schemas, request/response formats, and API behaviour.
 
 ## Impact
 
 - **Registry**: `apis.yml` gains a `docs` section alongside `apis`
-- **Code**: `src/ingestion/registry.ts` — parse new section; `src/ingestion/index.ts` — handle docs-only entries; new `src/server/tools/search-arch-docs.ts`
-- **Server**: `src/server/index.ts` — register the new tool
-- **Tests**: Extend registry and ingestion tests; add tool test
+- **Code**: `src/ingestion/registry.ts` — parse new section; `src/ingestion/index.ts` — handle docs-only entries; `src/server/tools/search-docs.ts` renamed to `search-api-docs.ts` with updated tool name and description; new `src/server/tools/search-arch-docs.ts`
+- **Server**: `src/server/index.ts` — register the new tool, update import for renamed tool
+- **Tests**: Extend registry and ingestion tests; add tool test; update existing search-docs test references
