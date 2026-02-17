@@ -51,6 +51,13 @@ function initDb(db: Database.Database, dimension: number = 1024): void {
   db.exec(SCHEMA);
   db.exec(FTS_SCHEMA);
 
+  // Migration: add source_hash column to apis table
+  try {
+    db.exec('ALTER TABLE apis ADD COLUMN source_hash TEXT');
+  } catch {
+    // Column already exists — ignore
+  }
+
   const stored = db
     .prepare("SELECT value FROM config WHERE key = 'embedding_dimension'")
     .get() as { value: string } | undefined;

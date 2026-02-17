@@ -1,5 +1,7 @@
+import 'dotenv/config';
 import { program } from 'commander';
-import { readdirSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { v5 as uuidV5 } from 'uuid';
@@ -9,6 +11,7 @@ import {
   deleteChunk,
   getChunksByApi,
   upsertApi,
+  getApiSourceHash,
 } from '../db/queries.js';
 import { parseOpenApiSpec } from './openapi-parser.js';
 import { parseMarkdownFile } from './markdown-parser.js';
@@ -34,10 +37,37 @@ interface IngestResult {
   embedded: number;
   skipped: number;
   deleted: number;
+  unchanged: boolean;
+  durationMs: number;
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 function formatResult(r: IngestResult): string {
-  return `  ${r.total} chunks: ${r.embedded} embedded, ${r.skipped} skipped, ${r.deleted} deleted`;
+  return `  ${r.total} chunks: ${r.embedded} embedded, ${r.skipped} skipped, ${r.deleted} deleted (${formatDuration(r.durationMs)})`;
+}
+
+export function computeSourceHash(
+  specPath?: string,
+  docsPath?: string,
+): string {
+  const hash = createHash('sha256');
+  if (specPath) {
+    hash.update(readFileSync(specPath));
+  }
+  if (docsPath && existsSync(docsPath)) {
+    const files = readdirSync(docsPath)
+      .filter((f) => f.endsWith('.md'))
+      .sort();
+    for (const file of files) {
+      hash.update(file);
+      hash.update(readFileSync(join(docsPath, file)));
+    }
+  }
+  return hash.digest('hex');
 }
 
 async function ingestChunks(
@@ -45,6 +75,7 @@ async function ingestChunks(
   chunks: Chunk[],
   api: Api,
 ): Promise<IngestResult> {
+  const start = performance.now();
   const db = getDb(undefined, getDimension());
 
   // Incremental re-indexing — compare content hashes
@@ -89,6 +120,8 @@ async function ingestChunks(
     embedded: changedChunks.length,
     skipped,
     deleted: orphans.length,
+    unchanged: false,
+    durationMs: performance.now() - start,
   };
 }
 
@@ -107,8 +140,27 @@ export async function ingestApi(
   name: string,
   specPath: string,
   docsPath?: string,
+  options?: { force?: boolean },
 ): Promise<IngestResult> {
   const id = apiId(name);
+
+  // Source-level skip: compare file hash to stored hash
+  const sourceHash = computeSourceHash(specPath, docsPath);
+  if (!options?.force) {
+    const db = getDb(undefined, getDimension());
+    const storedHash = getApiSourceHash(db, id);
+    if (storedHash === sourceHash) {
+      return {
+        api: name,
+        total: 0,
+        embedded: 0,
+        skipped: 0,
+        deleted: 0,
+        unchanged: true,
+        durationMs: 0,
+      };
+    }
+  }
 
   const chunks: Chunk[] = [];
   chunks.push(...(await parseOpenApiSpec(specPath, id)));
@@ -121,6 +173,7 @@ export async function ingestApi(
     name,
     specPath: resolve(specPath),
     docsPath: docsPath ? resolve(docsPath) : undefined,
+    sourceHash,
   };
 
   return ingestChunks(name, chunks, api);
@@ -129,18 +182,39 @@ export async function ingestApi(
 export async function ingestDocs(
   name: string,
   docsPath: string,
+  options?: { force?: boolean },
 ): Promise<IngestResult> {
   if (!existsSync(docsPath)) {
     throw new Error(`docs path does not exist: ${docsPath}`);
   }
 
   const id = apiId(name);
+
+  // Source-level skip: compare file hash to stored hash
+  const sourceHash = computeSourceHash(undefined, docsPath);
+  if (!options?.force) {
+    const db = getDb(undefined, getDimension());
+    const storedHash = getApiSourceHash(db, id);
+    if (storedHash === sourceHash) {
+      return {
+        api: name,
+        total: 0,
+        embedded: 0,
+        skipped: 0,
+        deleted: 0,
+        unchanged: true,
+        durationMs: 0,
+      };
+    }
+  }
+
   const chunks = await parseMarkdownDir(docsPath, id);
 
   const api: Api = {
     id,
     name,
     docsPath: resolve(docsPath),
+    sourceHash,
   };
 
   return ingestChunks(name, chunks, api);
@@ -152,6 +226,7 @@ export interface CliOptions {
   docs?: string;
   all?: boolean;
   registry?: string;
+  force?: boolean;
 }
 
 export async function runCli(opts: CliOptions): Promise<void> {
@@ -163,9 +238,11 @@ export async function runCli(opts: CliOptions): Promise<void> {
       if (!existsSync(registryPath)) {
         throw new CliError(`registry not found: ${registryPath}`);
       }
+      const allStart = performance.now();
       const registry = loadRegistry(registryPath);
       const results: IngestResult[] = [];
       let failed = 0;
+      let unchangedCount = 0;
 
       async function processEntry(
         name: string,
@@ -175,7 +252,12 @@ export async function runCli(opts: CliOptions): Promise<void> {
         try {
           const result = await ingest();
           results.push(result);
-          console.log(formatResult(result));
+          if (result.unchanged) {
+            unchangedCount++;
+            console.log('  unchanged, skipping');
+          } else {
+            console.log(formatResult(result));
+          }
         } catch (error) {
           if (error instanceof TypeError || error instanceof RangeError)
             throw error;
@@ -196,17 +278,17 @@ export async function runCli(opts: CliOptions): Promise<void> {
 
       for (const entry of registry.apis) {
         await processEntry(entry.name, () =>
-          ingestApi(entry.name, entry.spec, entry.docs),
+          ingestApi(entry.name, entry.spec, entry.docs, { force: opts.force }),
         );
       }
 
       for (const entry of registry.docs) {
         await processEntry(entry.name, () =>
-          ingestDocs(entry.name, entry.path),
+          ingestDocs(entry.name, entry.path, { force: opts.force }),
         );
       }
 
-      const entryCount = results.length;
+      const allDurationMs = performance.now() - allStart;
       const totals = results.reduce(
         (acc, r) => ({
           total: acc.total + r.total,
@@ -216,18 +298,35 @@ export async function runCli(opts: CliOptions): Promise<void> {
         }),
         { total: 0, embedded: 0, skipped: 0, deleted: 0 },
       );
+      const entryCount = results.length;
       const countLabel = `${entryCount} entr${entryCount !== 1 ? 'ies' : 'y'} processed`;
+      const unchangedSuffix =
+        unchangedCount > 0 ? `, ${unchangedCount} unchanged` : '';
       const chunkSummary = `${totals.total} chunks (${totals.embedded} embedded, ${totals.skipped} skipped, ${totals.deleted} deleted)`;
+      const timeSuffix = ` in ${formatDuration(allDurationMs)}`;
+      const throughput =
+        totals.embedded > 0 && allDurationMs > 0
+          ? ` (${(totals.embedded / (allDurationMs / 1000)).toFixed(1)} chunks/s)`
+          : '';
       const failSuffix = failed > 0 ? `, ${failed} failed` : '';
-      console.log(`\nDone. ${countLabel}, ${chunkSummary}${failSuffix}`);
+      console.log(
+        `\nDone. ${countLabel}${unchangedSuffix}, ${chunkSummary}${failSuffix}${timeSuffix}${throughput}`,
+      );
 
       if (failed > 0) {
         process.exitCode = 1;
       }
     } else if (opts.api && opts.spec) {
       console.log(`Ingesting ${opts.api}...`);
-      const result = await ingestApi(opts.api, opts.spec, opts.docs);
-      console.log(formatResult(result));
+      const result = await ingestApi(opts.api, opts.spec, opts.docs, {
+        force: opts.force,
+      });
+      if (result.unchanged) {
+        console.log('  unchanged, skipping');
+      } else {
+        console.log(formatResult(result));
+      }
+      console.log(`Done in ${formatDuration(result.durationMs)}.`);
     } else {
       throw new CliError('provide --api and --spec, or --all');
     }
@@ -242,8 +341,9 @@ program
   .option('--api <name>', 'API name')
   .option('--spec <path>', 'Path to OpenAPI spec file')
   .option('--docs <dir>', 'Path to markdown docs directory')
-  .option('--all', 'Ingest all APIs from registry')
+  .option('--all', 'Ingest all entries from registry')
   .option('--registry <path>', 'Path to registry file (default: apis.yml)')
+  .option('--force', 'Re-ingest even if source files are unchanged')
   .action(runCli);
 
 const isMain =

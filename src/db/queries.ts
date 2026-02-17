@@ -13,13 +13,14 @@ import {
 export function upsertApi(db: Database.Database, api: Api): void {
   db.prepare(
     `
-    INSERT INTO apis (id, name, version, spec_path, docs_path)
-    VALUES (@id, @name, @version, @specPath, @docsPath)
+    INSERT INTO apis (id, name, version, spec_path, docs_path, source_hash)
+    VALUES (@id, @name, @version, @specPath, @docsPath, @sourceHash)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       version = excluded.version,
       spec_path = excluded.spec_path,
       docs_path = excluded.docs_path,
+      source_hash = excluded.source_hash,
       updated_at = datetime('now')
   `,
   ).run({
@@ -28,7 +29,18 @@ export function upsertApi(db: Database.Database, api: Api): void {
     version: api.version ?? null,
     specPath: api.specPath ?? null,
     docsPath: api.docsPath ?? null,
+    sourceHash: api.sourceHash ?? null,
   });
+}
+
+export function getApiSourceHash(
+  db: Database.Database,
+  apiId: string,
+): string | undefined {
+  const row = db
+    .prepare('SELECT source_hash FROM apis WHERE id = ?')
+    .get(apiId) as { source_hash: string | null } | undefined;
+  return row?.source_hash ?? undefined;
 }
 
 export function getApis(db: Database.Database): Api[] {

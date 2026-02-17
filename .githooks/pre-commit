@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "==> Running format check..."
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+if [ -n "$STAGED" ]; then
+  echo "$STAGED" | xargs npx prettier --check --ignore-unknown
+fi
+
 echo "==> Running lint..."
 npm run lint
 
