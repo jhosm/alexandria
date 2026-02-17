@@ -146,3 +146,5 @@ bundles/
 alexandria.db
 alexandria.db-wal
 alexandria.db-shm
+
+.claude/settings.local.json
