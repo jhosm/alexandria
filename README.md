@@ -43,7 +43,16 @@ npm run ingest -- --api petstore --spec ./examples/petstore-openapi.yml --docs .
 npm run dev:server
 ```
 
-The server exposes search tools over stdio using the [Model Context Protocol](https://modelcontextprotocol.io/). Connect it to an MCP-compatible client to query your indexed documentation.
+The server exposes the following tools over stdio using the [Model Context Protocol](https://modelcontextprotocol.io/):
+
+| Tool                | Description                                                    |
+| ------------------- | -------------------------------------------------------------- |
+| `list-apis`         | List all indexed APIs and documentation collections            |
+| `search-api-docs`   | Search API documentation — endpoints, schemas, behaviour       |
+| `search-arch-docs`  | Search architecture documentation — concepts, patterns, guides |
+| `get-api-endpoints` | List all endpoints for a specific API                          |
+
+Connect it to an MCP-compatible client to query your indexed documentation.
 
 ### Configure MCP clients
 
@@ -118,7 +127,7 @@ Add to `.vscode/mcp.json` in the workspace root:
 | `npm run build`        | Compile TypeScript (not needed for dev — `tsx` runs TS directly) |
 | `npm run dev`          | Start MCP server with file watching                              |
 | `npm run dev:server`   | Start MCP server (stdio)                                         |
-| `npm run ingest`       | Index API documentation                                          |
+| `npm run ingest`       | Index API and standalone documentation                           |
 | `npm run pack`         | Build `.mcpb` bundle for Claude Desktop                          |
 | `npm test`             | Run tests (Vitest)                                               |
 | `npm run test:watch`   | Run tests in watch mode                                          |
@@ -126,15 +135,15 @@ Add to `.vscode/mcp.json` in the workspace root:
 | `npm run format`       | Prettier (write)                                                 |
 | `npm run format:check` | Prettier (check only)                                            |
 
-## Using your own API docs
+## Using your own docs
 
 Alexandria is organization-agnostic. The core engine is separate from the data it indexes — your registry file (`apis.yml`), OpenAPI specs, markdown docs, and the SQLite database are all configurable.
 
-To index your own APIs, create a directory with your data:
+To index your own documentation, create a directory with your data:
 
 ```
 my-org-docs/
-  apis.yml              # registry listing your APIs
+  apis.yml              # registry listing your APIs and docs
   specs/
     service-a.yaml
     service-b.yaml
@@ -143,9 +152,11 @@ my-org-docs/
       getting-started.md
     service-b/
       overview.md
+    arch/
+      patterns.md
 ```
 
-Your `apis.yml` references specs and docs with paths relative to itself:
+Your `apis.yml` references specs and docs with paths relative to itself. The `apis` section is for OpenAPI-backed services; the `docs` section is for standalone documentation collections (no spec required). Entry names must be unique across both sections.
 
 ```yaml
 apis:
@@ -155,6 +166,10 @@ apis:
   - name: service-b
     spec: ./specs/service-b.yaml
     docs: ./docs/service-b
+
+docs:
+  - name: arch
+    path: ./docs/arch
 ```
 
 Point Alexandria at your data using `--registry` or environment variables:
@@ -236,16 +251,3 @@ Alexandria depends on two native packages: `better-sqlite3` (Node addon) and `sq
    This places `build/Release/better_sqlite3.node` where the `bindings` package expects it.
 
 Alternatively, set `npm_config_better_sqlite3_binary_host` to an internal mirror hosting the same tarball structure.
-
-## Project Status
-
-| Phase                                                        | Status |
-| ------------------------------------------------------------ | ------ |
-| Project foundation (SQLite schema, hybrid search)            | Done   |
-| OpenAPI parser                                               | Done   |
-| Markdown parser                                              | Done   |
-| Voyage AI embedder                                           | Done   |
-| Ingestion CLI                                                | Done   |
-| Pluggable embedding providers (Voyage, Ollama, Transformers) | Done   |
-| MCP server                                                   | Done   |
-| Developer onboarding                                         | Done   |
