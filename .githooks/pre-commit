@@ -11,9 +11,15 @@ function run(label, cmd) {
 }
 
 // Format check on staged files only
-const staged = execSync('git diff --cached --name-only --diff-filter=ACM', {
-  encoding: 'utf8',
-}).trim();
+let staged;
+try {
+  staged = execSync('git diff --cached --name-only --diff-filter=ACM', {
+    encoding: 'utf8',
+  }).trim();
+} catch (error) {
+  console.error('==> Failed to determine staged files. Is this a git repository and is git installed?');
+  process.exit(1);
+}
 
 if (staged) {
   const files = staged
