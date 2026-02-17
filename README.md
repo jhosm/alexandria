@@ -1,8 +1,34 @@
 # Alexandria
 
-API documentation search engine. Indexes OpenAPI specs and markdown docs into SQLite with hybrid search (vector similarity + full-text), served via MCP over stdio.
+Alexandria is a documentation search engine for API teams. It indexes your OpenAPI specs and markdown docs into a local SQLite database, then serves that index as search tools via the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP).
 
-**Tech stack:** TypeScript, Node 18+, SQLite (better-sqlite3 + sqlite-vec + FTS5), MCP SDK, Vitest
+MCP clients — like Claude Desktop, Claude Code, and VS Code — connect to these search tools so that AI assistants can look up your API documentation on demand.
+
+## How it works
+
+Alexandria has two independent phases connected by a single SQLite database file:
+
+```
+┌─────────────┐       ┌──────────────┐       ┌────────────┐
+│  Your Docs  │──────▶│  Ingestion   │──────▶│  SQLite DB │
+│  (specs +   │       │  (parse,     │       │  (chunks,  │
+│   markdown) │       │   embed,     │       │   vectors, │
+│             │       │   store)     │       │   FTS)     │
+└─────────────┘       └──────────────┘       └─────┬──────┘
+                                                   │
+                                                   ▼
+                      ┌──────────────┐       ┌────────────┐
+                      │  MCP Client  │◀─────▶│ MCP Server │
+                      │  (Claude,    │ stdio │  (search   │
+                      │   VS Code)   │       │   tools)   │
+                      └──────────────┘       └────────────┘
+```
+
+**Phase 1 — Ingestion** parses your OpenAPI specs and markdown files, generates vector embeddings, and stores everything in a SQLite database. You run this once, and again whenever your docs change.
+
+**Phase 2 — MCP Server** reads the SQLite database and exposes search tools over stdio. MCP clients connect to this server to query your indexed documentation.
+
+These phases share no runtime state and run as separate processes. The database file is the only thing that connects them — you can ingest on one machine and serve on another by copying the `.db` file.
 
 ## Prerequisites
 
@@ -11,39 +37,39 @@ API documentation search engine. Indexes OpenAPI specs and markdown docs into SQ
 
 ## Quickstart
 
+**1. Install**
+
 ```bash
 git clone <repo-url> && cd alexandria
 npm install
 cp .env.example .env
 ```
 
-The default configuration uses Transformers.js for embeddings — runs locally, no API key needed. No changes to `.env` are required to get started.
+The default configuration uses Transformers.js for embeddings — runs locally, no API key needed.
 
 > **Voyage AI:** For higher-quality embeddings, set `EMBEDDING_PROVIDER=voyage` and `VOYAGE_API_KEY=your-key` in `.env`. A free tier is available at [voyageai.com](https://www.voyageai.com/). Switching providers requires re-indexing.
 
-## Usage
+**2. Ingest documentation** (Phase 1)
 
-### Ingest documentation
-
-Index the bundled example API (configured in the registry file `apis.yml`):
+Index the bundled example API (configured in `apis.yml`):
 
 ```bash
 npm run ingest -- --all
 ```
 
-Or index a single API by specifying its spec and docs:
+This parses the example specs and docs, generates embeddings, and writes everything to `alexandria.db`.
 
-```bash
-npm run ingest -- --api petstore --spec ./examples/petstore-openapi.yml --docs ./examples/
-```
-
-### Start the MCP server
+**3. Start the MCP server** (Phase 2)
 
 ```bash
 npm run dev:server
 ```
 
-The server exposes the following tools over stdio using the [Model Context Protocol](https://modelcontextprotocol.io/):
+The server reads `alexandria.db` and exposes search tools over stdio. Connect an MCP client to start querying — see [MCP Client Setup](docs/mcp-clients.md) for configuration guides.
+
+## What can you search?
+
+Once connected, the MCP server provides these tools to your AI assistant:
 
 | Tool                | Description                                                    |
 | ------------------- | -------------------------------------------------------------- |
@@ -52,73 +78,7 @@ The server exposes the following tools over stdio using the [Model Context Proto
 | `search-arch-docs`  | Search architecture documentation — concepts, patterns, guides |
 | `get-api-endpoints` | List all endpoints for a specific API                          |
 
-Connect it to an MCP-compatible client to query your indexed documentation.
-
-### Configure MCP clients
-
-#### Claude Desktop (one-click install)
-
-Alexandria ships a `.mcpb` bundle for one-click installation in Claude Desktop. The bundle uses Transformers.js by default — no API key needed.
-
-Build the bundle (or download a pre-built one from [GitHub Releases](https://github.com/jhosm/alexandria/releases)):
-
-```bash
-npm run pack
-```
-
-This produces `bundles/alexandria-<version>-<platform>-<arch>.mcpb`. Install it using any of these methods:
-
-1. **Double-click** the `.mcpb` file
-2. **Drag and drop** it into the Claude Desktop window
-3. **Menu**: Developer > Extensions > Install Extension, then select the file
-
-Claude Desktop will show the extension details and prompt for optional settings (embedding provider, Voyage API key, database path).
-
-#### Claude Code
-
-Run from the Alexandria project directory:
-
-```bash
-claude mcp add --transport stdio --env EMBEDDING_PROVIDER=transformers alexandria -- npx tsx src/server/index.ts
-```
-
-Or add to `.mcp.json` at the project root (or `~/.claude.json` for global access):
-
-```json
-{
-  "mcpServers": {
-    "alexandria": {
-      "command": "npx",
-      "args": ["tsx", "src/server/index.ts"],
-      "cwd": "/absolute/path/to/alexandria",
-      "env": {
-        "EMBEDDING_PROVIDER": "transformers"
-      }
-    }
-  }
-}
-```
-
-#### Visual Studio Code
-
-Add to `.vscode/mcp.json` in the workspace root:
-
-```json
-{
-  "servers": {
-    "alexandria": {
-      "command": "npx",
-      "args": ["tsx", "src/server/index.ts"],
-      "cwd": "/absolute/path/to/alexandria",
-      "env": {
-        "EMBEDDING_PROVIDER": "transformers"
-      }
-    }
-  }
-}
-```
-
-> **Note:** Replace `/absolute/path/to/alexandria` with the actual path to your Alexandria checkout. To use Voyage AI instead, set `"EMBEDDING_PROVIDER": "voyage"` and add `"VOYAGE_API_KEY": "your-key-here"`. The embedding provider must match the one used during ingestion.
+Search combines vector similarity and full-text matching (hybrid search) for accurate results across both natural-language queries and exact terms.
 
 ## Scripts
 
@@ -135,119 +95,10 @@ Add to `.vscode/mcp.json` in the workspace root:
 | `npm run format`       | Prettier (write)                                                 |
 | `npm run format:check` | Prettier (check only)                                            |
 
-## Using your own docs
+## Further reading
 
-Alexandria is organization-agnostic. The core engine is separate from the data it indexes — your registry file (`apis.yml`), OpenAPI specs, markdown docs, and the SQLite database are all configurable.
+- **[Ingestion Guide](docs/ingestion.md)** — Index your own docs, configure the registry, choose embedding providers
+- **[MCP Client Setup](docs/mcp-clients.md)** — Connect Alexandria to Claude Desktop, Claude Code, or VS Code
+- **[Troubleshooting](docs/troubleshooting.md)** — Native dependencies and build issues
 
-To index your own documentation, create a directory with your data:
-
-```
-my-org-docs/
-  apis.yml              # registry listing your APIs and docs
-  specs/
-    service-a.yaml
-    service-b.yaml
-  docs/
-    service-a/
-      getting-started.md
-    service-b/
-      overview.md
-    arch/
-      patterns.md
-```
-
-Your `apis.yml` references specs and docs with paths relative to itself. The `apis` section is for OpenAPI-backed services; the `docs` section is for standalone documentation collections (no spec required). Entry names must be unique across both sections.
-
-```yaml
-apis:
-  - name: service-a
-    spec: ./specs/service-a.yaml
-    docs: ./docs/service-a
-  - name: service-b
-    spec: ./specs/service-b.yaml
-    docs: ./docs/service-b
-
-docs:
-  - name: arch
-    path: ./docs/arch
-```
-
-Point Alexandria at your data using `--registry` or environment variables:
-
-```bash
-# Via CLI flag
-npm run ingest -- --all --registry ./my-org-docs/apis.yml
-
-# Via environment variables (in .env or shell)
-ALEXANDRIA_REGISTRY_PATH=./my-org-docs/apis.yml
-ALEXANDRIA_DB_PATH=./my-org-docs/alexandria.db
-```
-
-This keeps your org data in a separate directory (or even a separate repo) from the Alexandria codebase.
-
-## Advanced
-
-### Custom embedding models
-
-The Ollama and Transformers providers can use any compatible embedding model. Set the model, dimension, and (for Transformers) pooling strategy via environment variables in `.env`:
-
-**Ollama** — any model from the [Ollama library](https://ollama.com/library) that supports embeddings:
-
-```bash
-OLLAMA_MODEL=bge-large           # default
-OLLAMA_DIMENSION=1024            # must match the model's output dimension
-```
-
-**Transformers.js** — any ONNX model from HuggingFace (typically under the `Xenova/` namespace):
-
-```bash
-TRANSFORMERS_MODEL=Xenova/bge-large-en-v1.5   # default
-TRANSFORMERS_DIMENSION=1024                    # must match the model's output dimension
-TRANSFORMERS_POOLING=cls                       # cls (BGE models) or mean (MiniLM, etc.)
-```
-
-Example — switching to MiniLM for a lighter local setup:
-
-```bash
-EMBEDDING_PROVIDER=transformers
-TRANSFORMERS_MODEL=Xenova/all-MiniLM-L6-v2
-TRANSFORMERS_DIMENSION=384
-TRANSFORMERS_POOLING=mean
-```
-
-After changing the model or provider, re-index: `npm run ingest -- --all`.
-
-### Native dependencies without build tools
-
-Alexandria depends on two native packages: `better-sqlite3` (Node addon) and `sqlite-vec` (SQLite loadable extension). Both ship prebuilt binaries, so **C/C++ build tools are not normally required**.
-
-**sqlite-vec** distributes precompiled binaries via platform-specific npm packages (e.g., `sqlite-vec-darwin-arm64`). npm installs the correct one automatically. No build fallback exists — if your platform isn't supported, it won't compile from source.
-
-**better-sqlite3** uses [`prebuild-install`](https://github.com/prebuild/prebuild-install) to download prebuilt binaries from [GitHub Releases](https://github.com/WiseLibs/better-sqlite3/releases). If the download fails (network restrictions, unsupported Node version), it falls back to `node-gyp rebuild`, which requires a C/C++ compiler. If you don't have build tools and the prebuild download fails:
-
-1. **Determine your platform details:**
-
-   ```bash
-   node -e "console.log(process.platform, process.arch, 'abi=' + process.versions.modules)"
-   # Example output: darwin arm64 abi=127
-   ```
-
-2. **Download the matching prebuilt binary** from GitHub Releases:
-
-   ```
-   https://github.com/WiseLibs/better-sqlite3/releases/download/v<VERSION>/better-sqlite3-v<VERSION>-node-v<ABI>-<PLATFORM>-<ARCH>.tar.gz
-   ```
-
-   Replace `<VERSION>` with the version in `package-lock.json`, `<ABI>` with the abi number from step 1, `<PLATFORM>` with `darwin`/`linux`/`win32`, and `<ARCH>` with `arm64`/`x64`.
-
-3. **Install without running build scripts, then extract the binary:**
-
-   ```bash
-   npm install --ignore-scripts
-   tar -xzf better-sqlite3-v<VERSION>-node-v<ABI>-<PLATFORM>-<ARCH>.tar.gz \
-     -C node_modules/better-sqlite3/
-   ```
-
-   This places `build/Release/better_sqlite3.node` where the `bindings` package expects it.
-
-Alternatively, set `npm_config_better_sqlite3_binary_host` to an internal mirror hosting the same tarball structure.
+**Tech stack:** TypeScript, Node 18+, SQLite (better-sqlite3 + sqlite-vec + FTS5), MCP SDK, Vitest
