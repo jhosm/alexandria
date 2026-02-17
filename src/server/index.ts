@@ -3,8 +3,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { getDb, closeDb } from '../db/index.js';
 import { getDimension } from '../ingestion/embedder.js';
 import { registerListApis } from './tools/list-apis.js';
-import { registerSearchDocs } from './tools/search-docs.js';
+import { registerSearchApiDocs } from './tools/search-api-docs.js';
 import { registerGetApiEndpoints } from './tools/get-api-endpoints.js';
+import { registerSearchArchDocs } from './tools/search-arch-docs.js';
 
 const server = new McpServer({
   name: 'alexandria',
@@ -21,8 +22,9 @@ try {
 }
 
 registerListApis(server, db);
-registerSearchDocs(server, db);
+registerSearchApiDocs(server, db);
 registerGetApiEndpoints(server, db);
+registerSearchArchDocs(server, db);
 
 try {
   const transport = new StdioServerTransport();

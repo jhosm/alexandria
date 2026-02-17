@@ -6,43 +6,41 @@ import { embedQuery } from '../../ingestion/embedder.js';
 import { CHUNK_TYPES, type SearchOptions } from '../../shared/types.js';
 import { formatSearchResults } from '../format.js';
 
-export function registerSearchDocs(server: McpServer, db: Database.Database) {
+export function registerSearchArchDocs(
+  server: McpServer,
+  db: Database.Database,
+) {
   server.registerTool(
-    'search-docs',
+    'search-arch-docs',
     {
-      title: 'Search Documentation',
+      title: 'Search Architecture Documentation',
       description:
-        'Search indexed API documentation using natural language. Returns relevant chunks ranked by hybrid search (vector + full-text).',
+        'Search architecture documentation. Use this when you need to understand architecture concepts, write code to expose an API, or write code to consume an API.',
       inputSchema: {
         query: z.string().describe('Natural language search query'),
-        apiName: z
-          .string()
-          .optional()
-          .describe('Filter results to a specific API by name'),
         types: z
           .array(z.enum(CHUNK_TYPES))
           .optional()
-          .describe(
-            'Filter by chunk types: overview, endpoint, schema, glossary, use-case, guide',
-          ),
+          .describe('Filter by chunk types: glossary, use-case, guide'),
       },
     },
-    async ({ query, apiName, types }) => {
+    async ({ query, types }) => {
       try {
         const apis = getApis(db);
-        const options: SearchOptions = {};
-
-        if (apiName) {
-          const api = apis.find((a) => a.name === apiName);
-          if (!api) {
-            return {
-              content: [{ type: 'text', text: `API "${apiName}" not found.` }],
-              isError: true,
-            };
-          }
-          options.apiId = api.id;
+        const arch = apis.find((a) => a.name === 'arch');
+        if (!arch) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'Architecture documentation not indexed. Run ingestion first.',
+              },
+            ],
+            isError: true,
+          };
         }
 
+        const options: SearchOptions = { apiId: arch.id };
         if (types) {
           options.types = types;
         }
