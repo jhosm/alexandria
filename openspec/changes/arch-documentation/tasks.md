@@ -1,8 +1,8 @@
 ## 1. Registry: `docs` section support
 
 - [ ] 1.1 Add `DocEntry` interface (`name: string`, `path: string`) and `RegistryResult` interface (`apis: ApiEntry[]`, `docs: DocEntry[]`) to `src/ingestion/registry.ts`
-- [ ] 1.2 Change `loadRegistry` return type from `ApiEntry[]` to `RegistryResult`; parse top-level `docs` array with validation (name required, path required, resolve path relative to registry file); return empty arrays when either section is absent
-- [ ] 1.3 Update registry tests: add cases for docs-only registry, mixed registry, missing name/path in doc entry, path resolution for doc entries; update existing tests for new return type shape (`result.apis` instead of `result`)
+- [ ] 1.2 Change `loadRegistry` return type from `ApiEntry[]` to `RegistryResult`; parse top-level `docs` array with validation (name required, path required, resolve path relative to registry file); validate name uniqueness across both `apis` and `docs` sections (throw on duplicates); return empty arrays when either section is absent
+- [ ] 1.3 Update registry tests: add cases for docs-only registry, mixed registry, missing name/path in doc entry, path resolution for doc entries, duplicate name across sections, duplicate name within docs section; update existing tests for new return type shape (`result.apis` instead of `result`)
 - [ ] 1.4 Add "arch" entry to `apis.yml` under a `docs` section
 
 ## 2. Ingestion: docs-only entries
