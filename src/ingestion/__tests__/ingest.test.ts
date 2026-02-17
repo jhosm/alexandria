@@ -221,7 +221,7 @@ describe('ingestApi', () => {
     expect(apis).toHaveLength(1);
     expect(apis[0].name).toBe('myapi');
     expect(apis[0].specPath).toContain('sample-openapi.yaml');
-    expect(apis[0].docsPath).toContain('/some/docs');
+    expect(apis[0].docsPath).toMatch(/[/\\]some[/\\]docs/);
   });
 
   it('upserts API registry without docsPath when not provided', async () => {
