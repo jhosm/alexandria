@@ -24,7 +24,7 @@ vi.mock('../../db/index.js', async (importOriginal) => {
   };
 });
 
-import { ingestApi } from '../index.js';
+import { ingestApi, ingestDocs } from '../index.js';
 import { parseOpenApiSpec } from '../openapi-parser.js';
 import { parseMarkdownFile } from '../markdown-parser.js';
 import { embedDocuments } from '../embedder.js';
@@ -361,5 +361,68 @@ describe('ingestion pipeline verification', () => {
     const finalChunks = getChunksByApi(db, apiId);
     expect(finalChunks).toHaveLength(4);
     expect(finalChunks.find((c) => c.id === 'ep-get')).toBeUndefined();
+  });
+});
+
+describe('ingestDocs', () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = createTestDb();
+    vi.mocked(getDb).mockReturnValue(db);
+    vi.mocked(embedDocuments).mockImplementation(async (texts) =>
+      texts.map(() => fakeEmbedding()),
+    );
+    vi.mocked(parseMarkdownFile).mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    db.close();
+    vi.restoreAllMocks();
+  });
+
+  it('ingests docs-only entry (no spec parsing)', async () => {
+    let docIdx = 0;
+    vi.mocked(parseMarkdownFile).mockImplementation(async (_path, apiId) => [
+      makeChunk(`doc${docIdx++}`, apiId, { type: 'guide' }),
+    ]);
+
+    const result = await ingestDocs('arch', FIXTURES_DIR);
+
+    expect(result.api).toBe('arch');
+    expect(result.total).toBe(2); // fixtures has 2 .md files
+    expect(result.embedded).toBe(2);
+    expect(parseOpenApiSpec).not.toHaveBeenCalled();
+
+    const apis = getApis(db);
+    expect(apis).toHaveLength(1);
+    expect(apis[0].name).toBe('arch');
+    expect(apis[0].specPath).toBeUndefined();
+    expect(apis[0].docsPath).toContain('fixtures');
+  });
+
+  it('applies incremental re-indexing to docs entries', async () => {
+    let docIdx = 0;
+    vi.mocked(parseMarkdownFile).mockImplementation(async (_path, apiId) => [
+      makeChunk(`doc${docIdx++}`, apiId, { type: 'guide' }),
+    ]);
+
+    await ingestDocs('arch', FIXTURES_DIR);
+
+    // Re-ingest with same content
+    const apis = getApis(db);
+    const apiId = apis[0].id;
+    const dbChunks = getChunksByApi(db, apiId);
+
+    docIdx = 0;
+    vi.mocked(parseMarkdownFile).mockImplementation(async (_path) => {
+      return [{ ...dbChunks[docIdx++] }];
+    });
+    vi.mocked(embedDocuments).mockClear();
+
+    const result = await ingestDocs('arch', FIXTURES_DIR);
+
+    expect(result.embedded).toBe(0);
+    expect(result.skipped).toBe(2);
   });
 });

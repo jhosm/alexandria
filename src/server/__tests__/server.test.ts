@@ -5,8 +5,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createTestDb } from '../../db/index.js';
 import { upsertApi, upsertChunk } from '../../db/queries.js';
 import { registerListApis } from '../tools/list-apis.js';
-import { registerSearchDocs } from '../tools/search-docs.js';
+import { registerSearchApiDocs } from '../tools/search-api-docs.js';
 import { registerGetApiEndpoints } from '../tools/get-api-endpoints.js';
+import { registerSearchArchDocs } from '../tools/search-arch-docs.js';
 import type Database from 'better-sqlite3';
 
 const DIM = 3;
@@ -76,6 +77,40 @@ function seed(database: Database.Database) {
     },
     new Float32Array([0.3, 0.4, 0.5]),
   );
+
+  // Arch docs entry (no spec)
+  upsertApi(database, {
+    id: 'arch-1',
+    name: 'arch',
+  });
+
+  upsertChunk(
+    database,
+    {
+      id: 'arch-c1',
+      apiId: 'arch-1',
+      type: 'guide',
+      title: 'How to expose an API endpoint',
+      content:
+        'Architecture guide for exposing API endpoints using the standard patterns.',
+      contentHash: 'ah1',
+    },
+    new Float32Array([0.4, 0.5, 0.6]),
+  );
+
+  upsertChunk(
+    database,
+    {
+      id: 'arch-c2',
+      apiId: 'arch-1',
+      type: 'glossary',
+      title: 'Service mesh',
+      content:
+        'A service mesh is an infrastructure layer for service-to-service communication.',
+      contentHash: 'ah2',
+    },
+    new Float32Array([0.5, 0.6, 0.7]),
+  );
 }
 
 beforeAll(async () => {
@@ -84,8 +119,9 @@ beforeAll(async () => {
 
   mcpServer = new McpServer({ name: 'alexandria-test', version: '0.1.0' });
   registerListApis(mcpServer, db);
-  registerSearchDocs(mcpServer, db);
+  registerSearchApiDocs(mcpServer, db);
   registerGetApiEndpoints(mcpServer, db);
+  registerSearchArchDocs(mcpServer, db);
 
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
@@ -107,7 +143,8 @@ describe('MCP server integration', () => {
     expect(tools.tools.map((t) => t.name).sort()).toEqual([
       'get-api-endpoints',
       'list-apis',
-      'search-docs',
+      'search-api-docs',
+      'search-arch-docs',
     ]);
   });
 
@@ -121,10 +158,10 @@ describe('MCP server integration', () => {
     expect(text).toContain('payments');
   });
 
-  it('4.3 — search-docs returns relevant results', async () => {
+  it('4.3 — search-api-docs returns relevant results', async () => {
     const text = textContent(
       await client.callTool({
-        name: 'search-docs',
+        name: 'search-api-docs',
         arguments: { query: 'list pets' },
       }),
     );
@@ -139,7 +176,7 @@ describe('MCP server integration', () => {
 
     const text = textContent(
       await client.callTool({
-        name: 'search-docs',
+        name: 'search-api-docs',
         arguments: { query: 'xyzzy nonexistent topic' },
       }),
     );
@@ -152,7 +189,7 @@ describe('MCP server integration', () => {
   it('4.3c — search-docs filters by API name', async () => {
     const text = textContent(
       await client.callTool({
-        name: 'search-docs',
+        name: 'search-api-docs',
         arguments: { query: 'pets', apiName: 'petstore' },
       }),
     );
@@ -162,7 +199,7 @@ describe('MCP server integration', () => {
 
   it('4.3d — search-docs returns error for unknown API', async () => {
     const result = await client.callTool({
-      name: 'search-docs',
+      name: 'search-api-docs',
       arguments: { query: 'test', apiName: 'nonexistent' },
     });
 
@@ -173,7 +210,7 @@ describe('MCP server integration', () => {
   it('4.3e — search-docs filters by chunk types', async () => {
     const text = textContent(
       await client.callTool({
-        name: 'search-docs',
+        name: 'search-api-docs',
         arguments: { query: 'pets', types: ['endpoint'] },
       }),
     );
@@ -217,6 +254,113 @@ describe('MCP server integration', () => {
     expect(text).toContain('No endpoints found for "payments"');
   });
 
+  it('4.5 — search-arch-docs returns architecture results', async () => {
+    const text = textContent(
+      await client.callTool({
+        name: 'search-arch-docs',
+        arguments: { query: 'how to expose an endpoint' },
+      }),
+    );
+
+    expect(text).toContain('Search Results');
+    expect(text).toContain('arch');
+  });
+
+  it('4.5b — search-arch-docs filters by chunk types', async () => {
+    const text = textContent(
+      await client.callTool({
+        name: 'search-arch-docs',
+        arguments: { query: 'architecture', types: ['guide'] },
+      }),
+    );
+
+    expect(text).toContain('guide');
+    expect(text).not.toContain('Service mesh');
+  });
+
+  it('4.5c — search-arch-docs returns error when arch not indexed', async () => {
+    const emptyDb = createTestDb(DIM);
+    const emptyServer = new McpServer({
+      name: 'alexandria-no-arch',
+      version: '0.1.0',
+    });
+    registerSearchArchDocs(emptyServer, emptyDb);
+
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const emptyClient = new Client({
+      name: 'no-arch-test',
+      version: '1.0.0',
+    });
+    await emptyServer.connect(st);
+    await emptyClient.connect(ct);
+
+    const result = await emptyClient.callTool({
+      name: 'search-arch-docs',
+      arguments: { query: 'anything' },
+    });
+
+    expect(textContent(result)).toContain(
+      'Architecture documentation not indexed',
+    );
+    expect(result.isError).toBe(true);
+
+    await emptyClient.close();
+    await emptyServer.close();
+    emptyDb.close();
+  });
+
+  it('4.3f — search-api-docs returns error when embedQuery throws', async () => {
+    const { embedQuery } = await import('../../ingestion/embedder.js');
+    vi.mocked(embedQuery).mockRejectedValueOnce(new Error('Embedding failed'));
+
+    const result = await client.callTool({
+      name: 'search-api-docs',
+      arguments: { query: 'test' },
+    });
+
+    expect(textContent(result)).toContain('Search failed: Embedding failed');
+    expect(result.isError).toBe(true);
+  });
+
+  it('4.3g — search-api-docs handles non-Error throw', async () => {
+    const { embedQuery } = await import('../../ingestion/embedder.js');
+    vi.mocked(embedQuery).mockRejectedValueOnce('raw string error');
+
+    const result = await client.callTool({
+      name: 'search-api-docs',
+      arguments: { query: 'test' },
+    });
+
+    expect(textContent(result)).toContain('Search failed: raw string error');
+    expect(result.isError).toBe(true);
+  });
+
+  it('4.5d — search-arch-docs returns error when embedQuery throws', async () => {
+    const { embedQuery } = await import('../../ingestion/embedder.js');
+    vi.mocked(embedQuery).mockRejectedValueOnce(new Error('Embedding failed'));
+
+    const result = await client.callTool({
+      name: 'search-arch-docs',
+      arguments: { query: 'test' },
+    });
+
+    expect(textContent(result)).toContain('Search failed: Embedding failed');
+    expect(result.isError).toBe(true);
+  });
+
+  it('4.5e — search-arch-docs handles non-Error throw', async () => {
+    const { embedQuery } = await import('../../ingestion/embedder.js');
+    vi.mocked(embedQuery).mockRejectedValueOnce('raw string error');
+
+    const result = await client.callTool({
+      name: 'search-arch-docs',
+      arguments: { query: 'test' },
+    });
+
+    expect(textContent(result)).toContain('Search failed: raw string error');
+    expect(result.isError).toBe(true);
+  });
+
   it('4.2b — list-apis returns empty-state when no APIs', async () => {
     const emptyDb = createTestDb(DIM);
     const emptyServer = new McpServer({
@@ -242,5 +386,65 @@ describe('MCP server integration', () => {
     await emptyClient.close();
     await emptyServer.close();
     emptyDb.close();
+  });
+
+  it('4.2c — list-apis returns error when DB is closed', async () => {
+    const brokenDb = createTestDb(DIM);
+    const brokenServer = new McpServer({
+      name: 'alexandria-broken',
+      version: '0.1.0',
+    });
+    registerListApis(brokenServer, brokenDb);
+
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const brokenClient = new Client({
+      name: 'broken-test',
+      version: '1.0.0',
+    });
+    await brokenServer.connect(st);
+    await brokenClient.connect(ct);
+
+    brokenDb.close();
+
+    const result = await brokenClient.callTool({
+      name: 'list-apis',
+      arguments: {},
+    });
+
+    expect(textContent(result)).toContain('Failed to list APIs');
+    expect(result.isError).toBe(true);
+
+    await brokenClient.close();
+    await brokenServer.close();
+  });
+
+  it('4.4d — get-api-endpoints returns error when DB is closed', async () => {
+    const brokenDb = createTestDb(DIM);
+    const brokenServer = new McpServer({
+      name: 'alexandria-broken-ep',
+      version: '0.1.0',
+    });
+    registerGetApiEndpoints(brokenServer, brokenDb);
+
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const brokenClient = new Client({
+      name: 'broken-ep-test',
+      version: '1.0.0',
+    });
+    await brokenServer.connect(st);
+    await brokenClient.connect(ct);
+
+    brokenDb.close();
+
+    const result = await brokenClient.callTool({
+      name: 'get-api-endpoints',
+      arguments: { apiName: 'petstore' },
+    });
+
+    expect(textContent(result)).toContain('Failed to get endpoints');
+    expect(result.isError).toBe(true);
+
+    await brokenClient.close();
+    await brokenServer.close();
   });
 });
