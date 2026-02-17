@@ -38,6 +38,20 @@ Each `docs` entry SHALL be validated for required fields. The `path` SHALL be re
 - **WHEN** a `docs` entry has `path: ./docs/arch`
 - **THEN** the system SHALL resolve it relative to the registry file's directory
 
+### Requirement: Name uniqueness across sections
+
+Entry names SHALL be unique across both `apis` and `docs` sections. The registry loader SHALL collect all names from both sections and throw an error if any name appears more than once.
+
+#### Scenario: Duplicate name across apis and docs
+
+- **WHEN** `apis.yml` has an API entry with `name: "payments"` and a docs entry with `name: "payments"`
+- **THEN** the system SHALL throw an error indicating the duplicate name
+
+#### Scenario: Duplicate name within docs section
+
+- **WHEN** `apis.yml` has two docs entries both with `name: "arch"`
+- **THEN** the system SHALL throw an error indicating the duplicate name
+
 ### Requirement: DocEntry type
 
 The registry loader SHALL return doc entries as a `DocEntry` type with `name: string` and `path: string`, separate from the existing `ApiEntry` type. The return type SHALL be a `RegistryResult` containing both `apis: ApiEntry[]` and `docs: DocEntry[]`.

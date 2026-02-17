@@ -47,6 +47,8 @@ docs:
 
 **Rationale**: The search layer already works with `apiId` as a generic scope key. A docs entry is just an entry without a spec — the query layer doesn't care.
 
+**Constraint**: Entry names must be unique across both `apis` and `docs` sections. The `apis` table has a `UNIQUE` constraint on `name`, and `apiId` is derived from name alone (`uuidV5(name, namespace)`), so a name collision between sections would produce the same ID and overwrite the existing row. The registry loader validates this at parse time.
+
 ### D3: Registry loader returns a unified type with optional `spec`
 
 **Choice**: `loadRegistry` returns both `apis` and `docs` entries as separate arrays from a single `RegistryResult` type. `ApiEntry` keeps `spec` required. A new `DocEntry` type has just `name` and `path`.
@@ -89,4 +91,5 @@ interface RegistryResult { apis: ApiEntry[]; docs: DocEntry[]; }
 
 - **"arch" entry must exist** → `search-arch-docs` will return an error if "arch" hasn't been ingested. Mitigation: clear error message ("Architecture documentation not indexed. Run ingestion first."). Same pattern as `get-api-endpoints` returning "API not found."
 - **Test references to `search-docs`** → Renaming the tool breaks existing server tests. Mitigation: straightforward find-and-replace in test file. Small blast radius.
+- **Name collision between sections** → A docs entry with the same name as an API entry would produce the same `apiId` (UUID derived from name) and collide in the `apis` table. Mitigation: registry loader validates name uniqueness across both sections at parse time.
 - **No CLI flag for single doc entry** → There's no `--doc <name>` equivalent of `--api <name>`. Mitigation: not needed for MVP. If needed later, it's a simple addition.

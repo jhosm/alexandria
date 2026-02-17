@@ -17,7 +17,7 @@ The MCP server SHALL register a tool named `search-arch-docs` that searches arch
 #### Scenario: Architecture not indexed
 
 - **WHEN** `search-arch-docs` is called but no "arch" entry exists in the database
-- **THEN** it SHALL return an error message: "Architecture documentation not indexed yet."
+- **THEN** it SHALL return an error message: "Architecture documentation not indexed. Run ingestion first."
 
 ### Requirement: search-arch-docs input schema
 

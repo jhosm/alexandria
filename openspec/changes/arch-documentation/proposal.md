@@ -13,7 +13,7 @@ LLM agents using Alexandria need to understand the architecture — the patterns
 
 ### New Capabilities
 
-- `docs-registry`: A `docs` section in `apis.yml` for indexing standalone documentation collections. Each entry has `name` (required) and `path` (required, directory of markdown files). Processed by the same ingestion pipeline but skips OpenAPI parsing entirely.
+- `docs-registry`: A `docs` section in `apis.yml` for indexing standalone documentation collections. Each entry has `name` (required, unique across both `apis` and `docs` sections) and `path` (required, directory of markdown files). Processed by the same ingestion pipeline but skips OpenAPI parsing entirely.
 - `search-arch-docs-tool`: A dedicated MCP tool for searching architecture documentation. Description explicitly tells the agent to use it when understanding architecture concepts, writing code to expose an API, or writing code to consume an API. Scoped to the "arch" entry internally.
 
 ### Modified Capabilities
