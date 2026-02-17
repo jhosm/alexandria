@@ -1,17 +1,30 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env node
+import { execSync } from 'node:child_process';
 
-echo "==> Running format check..."
-STAGED=$(git diff --cached --name-only --diff-filter=ACM)
-if [ -n "$STAGED" ]; then
-  echo "$STAGED" | xargs npx prettier --check --ignore-unknown
-fi
+function run(label, cmd) {
+  console.log(`==> ${label}...`);
+  try {
+    execSync(cmd, { stdio: 'inherit' });
+  } catch {
+    process.exit(1);
+  }
+}
 
-echo "==> Running lint..."
-npm run lint
+// Format check on staged files only
+const staged = execSync('git diff --cached --name-only --diff-filter=ACM', {
+  encoding: 'utf8',
+}).trim();
 
-echo "==> Running type check..."
-npx tsc --noEmit
+if (staged) {
+  const files = staged
+    .split('\n')
+    .map((f) => JSON.stringify(f))
+    .join(' ');
+  run('Running format check', `npx prettier --check --ignore-unknown ${files}`);
+} else {
+  console.log('==> Skipping format check (no staged files)');
+}
 
-echo "==> Running tests..."
-npm test
+run('Running lint', 'npm run lint');
+run('Running type check', 'npx tsc --noEmit');
+run('Running tests', 'npm test');
