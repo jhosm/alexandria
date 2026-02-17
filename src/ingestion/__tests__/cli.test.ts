@@ -50,7 +50,7 @@ describe('ingest CLI', () => {
     try {
       const { stderr, code } = await run(['--all'], { cwd: tmpDir });
       expect(code).toBe(1);
-      expect(stderr).toContain('apis.yml not found');
+      expect(stderr).toContain('registry not found');
     } finally {
       rmSync(tmpDir, { recursive: true, force: true });
     }

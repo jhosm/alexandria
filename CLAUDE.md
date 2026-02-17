@@ -47,7 +47,8 @@ npm run lint           # ESLint
 npm run format         # Prettier (write)
 npm run format:check   # Prettier (check only)
 npm run ingest -- --api <name> --spec <path> --docs <dir>  # Index single API
-npm run ingest -- --all                                     # Index all from apis.yml
+npm run ingest -- --all                                     # Index all from registry
+npm run ingest -- --all --registry <path>                   # Index all from custom registry file
 ```
 
 Pre-commit hook (`.githooks/pre-commit`) runs lint + typecheck + tests automatically.
@@ -55,6 +56,9 @@ Pre-commit hook (`.githooks/pre-commit`) runs lint + typecheck + tests automatic
 ## Environment
 
 ```bash
+ALEXANDRIA_DB_PATH=./alexandria.db # Optional, default shown
+ALEXANDRIA_REGISTRY_PATH=apis.yml  # Optional, default shown
+
 EMBEDDING_PROVIDER=voyage          # voyage (default) | ollama | transformers
 
 # Voyage AI (when EMBEDDING_PROVIDER=voyage)
