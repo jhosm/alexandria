@@ -170,7 +170,7 @@ describe('MCP server integration', () => {
     expect(text).toContain('pets');
   });
 
-  it('4.3b — search-docs handles query with no FTS matches', async () => {
+  it('4.3b — search-api-docs handles query with no FTS matches', async () => {
     const { embedQuery } = await import('../../ingestion/embedder.js');
     vi.mocked(embedQuery).mockResolvedValueOnce(new Float32Array([99, 99, 99]));
 
@@ -186,7 +186,7 @@ describe('MCP server integration', () => {
     expect(text).toBeDefined();
   });
 
-  it('4.3c — search-docs filters by API name', async () => {
+  it('4.3c — search-api-docs filters by API name', async () => {
     const text = textContent(
       await client.callTool({
         name: 'search-api-docs',
@@ -197,7 +197,7 @@ describe('MCP server integration', () => {
     expect(text).toContain('petstore');
   });
 
-  it('4.3d — search-docs returns error for unknown API', async () => {
+  it('4.3d — search-api-docs returns error for unknown API', async () => {
     const result = await client.callTool({
       name: 'search-api-docs',
       arguments: { query: 'test', apiName: 'nonexistent' },
@@ -207,7 +207,7 @@ describe('MCP server integration', () => {
     expect(result.isError).toBe(true);
   });
 
-  it('4.3e — search-docs filters by chunk types', async () => {
+  it('4.3e — search-api-docs filters by chunk types', async () => {
     const text = textContent(
       await client.callTool({
         name: 'search-api-docs',
