@@ -19,7 +19,7 @@ src/
     openapi-parser.ts      — OpenAPI 3.x → overview/endpoint/schema chunks
     markdown-parser.ts     — Markdown → glossary/use-case/guide chunks (AST-based, heading split)
     embedder.ts            — Thin facade delegating to active embedding provider
-    registry.ts            — YAML registry loader (apis.yml → ApiEntry[])
+    registry.ts            — YAML registry loader (apis.yml → RegistryResult { apis, docs })
     index.ts               — CLI entry: parse → hash compare → embed changed → upsert → delete orphans
     providers/
       types.ts             — EmbeddingProvider interface (dimension, embedDocuments, embedQuery)
@@ -30,8 +30,8 @@ src/
   server/
     index.ts               — MCP server over stdio (StdioServerTransport)
     format.ts              — Response formatters (API list, search results, endpoints)
-    tools/                 — list-apis, search-docs, get-api-endpoints
-apis.yml                   — API registry (name, spec path, docs dir)
+    tools/                 — list-apis, search-api-docs, search-arch-docs, get-api-endpoints
+apis.yml                   — Registry (apis: name/spec/docs, docs: name/path)
 alexandria.db              — SQLite database (gitignored)
 ```
 

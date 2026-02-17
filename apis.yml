@@ -2,3 +2,7 @@ apis:
   - name: petstore
     spec: ./examples/petstore-openapi.yml
     docs: ./examples/
+
+docs:
+  - name: arch
+    path: ./docs/arch

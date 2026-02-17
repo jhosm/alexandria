@@ -110,6 +110,72 @@ export async function ingestApi(
   };
 }
 
+export async function ingestDocs(
+  name: string,
+  docsPath: string,
+): Promise<IngestResult> {
+  const id = apiId(name);
+  const db = getDb(undefined, getDimension());
+
+  // Parse docs → collect all chunks (no OpenAPI spec)
+  const chunks: Chunk[] = [];
+  if (existsSync(docsPath)) {
+    const files = readdirSync(docsPath).filter((f) => f.endsWith('.md'));
+    for (const file of files) {
+      chunks.push(...(await parseMarkdownFile(join(docsPath, file), id)));
+    }
+  }
+
+  // Incremental re-indexing — compare content hashes
+  const existingChunks = getChunksByApi(db, id);
+  const existingHashMap = new Map(
+    existingChunks.map((c) => [c.id, c.contentHash]),
+  );
+
+  const changedChunks: Chunk[] = [];
+  let skipped = 0;
+
+  for (const chunk of chunks) {
+    const existingHash = existingHashMap.get(chunk.id);
+    if (existingHash === chunk.contentHash) {
+      skipped++;
+    } else {
+      changedChunks.push(chunk);
+    }
+  }
+
+  // Batch embed changed chunks (before any DB writes for atomicity)
+  const embeddings = await embedDocuments(changedChunks.map((c) => c.content));
+
+  // Atomic write: API registry + chunk upserts + orphan cleanup
+  const api: Api = {
+    id,
+    name,
+    docsPath: resolve(docsPath),
+  };
+  const currentIds = new Set(chunks.map((c) => c.id));
+  const orphans = existingChunks.filter((c) => !currentIds.has(c.id));
+
+  const writeAll = db.transaction(() => {
+    upsertApi(db, api);
+    for (let i = 0; i < changedChunks.length; i++) {
+      upsertChunk(db, changedChunks[i], embeddings[i]);
+    }
+    for (const orphan of orphans) {
+      deleteChunk(db, orphan.id);
+    }
+  });
+  writeAll();
+
+  return {
+    api: name,
+    total: chunks.length,
+    embedded: changedChunks.length,
+    skipped,
+    deleted: orphans.length,
+  };
+}
+
 export interface CliOptions {
   api?: string;
   spec?: string;
@@ -127,10 +193,12 @@ export async function runCli(opts: CliOptions): Promise<void> {
       if (!existsSync(registryPath)) {
         throw new CliError(`registry not found: ${registryPath}`);
       }
-      const entries = loadRegistry(registryPath);
+      const registry = loadRegistry(registryPath);
       const results: IngestResult[] = [];
       let failed = 0;
-      for (const entry of entries) {
+
+      // Process API entries
+      for (const entry of registry.apis) {
         console.log(`Ingesting ${entry.name}...`);
         try {
           const result = await ingestApi(entry.name, entry.spec, entry.docs);
@@ -154,6 +222,32 @@ export async function runCli(opts: CliOptions): Promise<void> {
         }
       }
 
+      // Process docs entries
+      for (const entry of registry.docs) {
+        console.log(`Ingesting ${entry.name}...`);
+        try {
+          const result = await ingestDocs(entry.name, entry.path);
+          results.push(result);
+          console.log(formatResult(result));
+        } catch (error) {
+          if (error instanceof TypeError || error instanceof RangeError)
+            throw error;
+          if (
+            error instanceof Error &&
+            /SQLITE_(CORRUPT|READONLY|FULL|IOERR)/.test(error.message)
+          )
+            throw error;
+
+          failed++;
+          const msg = error instanceof Error ? error.message : String(error);
+          console.error(`  Error ingesting ${entry.name}: ${msg}`);
+          if (error instanceof Error && error.stack) {
+            console.error(error.stack);
+          }
+        }
+      }
+
+      const entryCount = results.length;
       const totals = results.reduce(
         (acc, r) => ({
           total: acc.total + r.total,
@@ -163,10 +257,10 @@ export async function runCli(opts: CliOptions): Promise<void> {
         }),
         { total: 0, embedded: 0, skipped: 0, deleted: 0 },
       );
-      const apiCount = `${results.length} API${results.length !== 1 ? 's' : ''} processed`;
+      const countLabel = `${entryCount} entr${entryCount !== 1 ? 'ies' : 'y'} processed`;
       const chunkSummary = `${totals.total} chunks (${totals.embedded} embedded, ${totals.skipped} skipped, ${totals.deleted} deleted)`;
       const failSuffix = failed > 0 ? `, ${failed} failed` : '';
-      console.log(`\nDone. ${apiCount}, ${chunkSummary}${failSuffix}`);
+      console.log(`\nDone. ${countLabel}, ${chunkSummary}${failSuffix}`);
 
       if (failed > 0) {
         process.exitCode = 1;

@@ -207,7 +207,7 @@ describe('runCli', () => {
       // Summary line
       const summaryCalls = logSpy.mock.calls.map((c) => c[0]);
       expect(
-        summaryCalls.some((s: string) => s.includes('Done. 1 API processed')),
+        summaryCalls.some((s: string) => s.includes('Done. 1 entry processed')),
       ).toBe(true);
       expect(closeDb).toHaveBeenCalled();
     } finally {
@@ -225,7 +225,9 @@ describe('runCli', () => {
       await runCli({ all: true });
       const summaryCalls = logSpy.mock.calls.map((c) => c[0]);
       expect(
-        summaryCalls.some((s: string) => s.includes('Done. 0 APIs processed')),
+        summaryCalls.some((s: string) =>
+          s.includes('Done. 0 entries processed'),
+        ),
       ).toBe(true);
     } finally {
       process.chdir(origCwd);
@@ -265,10 +267,76 @@ describe('runCli', () => {
       expect(
         summaryCalls.some(
           (s: string) =>
-            s.includes('1 API processed') && s.includes('1 failed'),
+            s.includes('1 entry processed') && s.includes('1 failed'),
         ),
       ).toBe(true);
       expect(process.exitCode).toBe(1);
+    } finally {
+      process.chdir(origCwd);
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('--all processes both apis and docs entries', async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'alexandria-runcli-'));
+    const origCwd = process.cwd();
+    try {
+      const fixtures = import.meta.dirname + '/fixtures';
+      writeFileSync(
+        join(tmpDir, 'apis.yml'),
+        `apis:\n  - name: pets\n    spec: ${fixtures}/sample-openapi.yaml\ndocs:\n  - name: arch\n    path: ${fixtures}\n`,
+      );
+
+      vi.mocked(parseOpenApiSpec).mockImplementation(async (_path, apiId) => [
+        makeChunk('e1', apiId),
+      ]);
+      let docIdx = 0;
+      vi.mocked(parseMarkdownFile).mockImplementation(async (_path, apiId) => [
+        makeChunk(`d${docIdx++}`, apiId),
+      ]);
+
+      process.chdir(tmpDir);
+      await runCli({ all: true });
+
+      expect(logSpy).toHaveBeenCalledWith('Ingesting pets...');
+      expect(logSpy).toHaveBeenCalledWith('Ingesting arch...');
+      const summaryCalls = logSpy.mock.calls.map((c) => c[0]);
+      expect(
+        summaryCalls.some((s: string) =>
+          s.includes('Done. 2 entries processed'),
+        ),
+      ).toBe(true);
+      expect(closeDb).toHaveBeenCalled();
+    } finally {
+      process.chdir(origCwd);
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('--all processes docs-only registry', async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'alexandria-runcli-'));
+    const origCwd = process.cwd();
+    try {
+      const fixtures = import.meta.dirname + '/fixtures';
+      writeFileSync(
+        join(tmpDir, 'apis.yml'),
+        `docs:\n  - name: arch\n    path: ${fixtures}\n`,
+      );
+
+      let docIdx = 0;
+      vi.mocked(parseMarkdownFile).mockImplementation(async (_path, apiId) => [
+        makeChunk(`d${docIdx++}`, apiId),
+      ]);
+
+      process.chdir(tmpDir);
+      await runCli({ all: true });
+
+      expect(logSpy).toHaveBeenCalledWith('Ingesting arch...');
+      expect(parseOpenApiSpec).not.toHaveBeenCalled();
+      const summaryCalls = logSpy.mock.calls.map((c) => c[0]);
+      expect(
+        summaryCalls.some((s: string) => s.includes('Done. 1 entry processed')),
+      ).toBe(true);
     } finally {
       process.chdir(origCwd);
       rmSync(tmpDir, { recursive: true, force: true });

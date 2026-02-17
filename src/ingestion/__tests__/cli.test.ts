@@ -76,7 +76,7 @@ describe('ingest CLI', () => {
       expect(combined).toContain('Error ingesting a:');
       expect(combined).toContain('Error ingesting b:');
       // Summary still printed
-      expect(combined).toMatch(/Done\. 0 APIs processed/);
+      expect(combined).toMatch(/Done\. 0 entries processed/);
       expect(combined).toMatch(/2 failed/);
       expect(code).toBe(1);
     } finally {
