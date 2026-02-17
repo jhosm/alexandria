@@ -29,7 +29,8 @@ function run(
 beforeAll(async () => {
   // Ensure build is fresh — tests run against compiled JS
   const { execFileSync } = await import('node:child_process');
-  execFileSync('npm', ['run', 'build'], { stdio: 'ignore', shell: true });
+  const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  execFileSync(npmCmd, ['run', 'build'], { stdio: 'ignore' });
 });
 
 describe('ingest CLI', () => {
