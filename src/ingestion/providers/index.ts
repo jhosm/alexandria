@@ -24,7 +24,7 @@ function createProvider(name: ProviderName): EmbeddingProvider {
 export function getProvider(): EmbeddingProvider {
   if (instance) return instance;
 
-  const name = (process.env.EMBEDDING_PROVIDER || 'voyage') as string;
+  const name = (process.env.EMBEDDING_PROVIDER || 'transformers') as string;
 
   if (!VALID_PROVIDERS.includes(name as ProviderName)) {
     throw new Error(

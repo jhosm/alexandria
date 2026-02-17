@@ -13,11 +13,13 @@ function makeResponse(embeddings: number[][]): Response {
 
 describe('embedder', () => {
   beforeEach(() => {
+    process.env.EMBEDDING_PROVIDER = 'voyage';
     process.env.VOYAGE_API_KEY = 'test-key';
     resetProvider();
   });
 
   afterEach(() => {
+    delete process.env.EMBEDDING_PROVIDER;
     delete process.env.VOYAGE_API_KEY;
     vi.restoreAllMocks();
     resetProvider();

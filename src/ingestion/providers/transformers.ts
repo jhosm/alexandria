@@ -1,4 +1,5 @@
 import {
+  env,
   pipeline,
   type FeatureExtractionPipeline,
 } from '@huggingface/transformers';
@@ -29,9 +30,19 @@ export class TransformersProvider implements EmbeddingProvider {
   private async getPipeline(): Promise<FeatureExtractionPipeline> {
     if (this.pipeline) return this.pipeline;
 
+    const modelPath = process.env.TRANSFORMERS_MODEL_PATH;
+    const model = modelPath || this.model;
+    if (modelPath) {
+      env.allowRemoteModels = false;
+    }
+
+    const dtype = process.env.TRANSFORMERS_DTYPE;
+
     try {
       // @ts-expect-error — pipeline() return type is a union too complex for TS to resolve
-      this.pipeline = await pipeline('feature-extraction', this.model);
+      this.pipeline = await pipeline('feature-extraction', model, {
+        ...(dtype ? { dtype } : {}),
+      });
     } catch (error) {
       throw new Error(
         `Failed to load Transformers model "${this.model}": ${error instanceof Error ? error.message : error}`,

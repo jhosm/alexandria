@@ -21,9 +21,9 @@ describe('getProvider', () => {
     resetProvider();
   });
 
-  it('defaults to VoyageProvider when EMBEDDING_PROVIDER is not set', () => {
+  it('defaults to TransformersProvider when EMBEDDING_PROVIDER is not set', () => {
     delete process.env.EMBEDDING_PROVIDER;
-    expect(getProvider()).toBeInstanceOf(VoyageProvider);
+    expect(getProvider()).toBeInstanceOf(TransformersProvider);
   });
 
   it('returns VoyageProvider when EMBEDDING_PROVIDER=voyage', () => {

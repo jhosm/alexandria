@@ -47,6 +47,7 @@ describe('TransformersProvider', () => {
     expect(mockPipelineFn).toHaveBeenCalledWith(
       'feature-extraction',
       'Xenova/bge-large-en-v1.5',
+      {},
     );
     expect(mockPipeline).toHaveBeenCalledWith(['hello', 'world'], {
       pooling: 'cls',
@@ -123,6 +124,7 @@ describe('TransformersProvider', () => {
     expect(mockPipelineFn).toHaveBeenCalledWith(
       'feature-extraction',
       'custom/model',
+      {},
     );
   });
 
