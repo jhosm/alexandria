@@ -21,7 +21,9 @@ export function registerSearchArchDocs(
         types: z
           .array(z.enum(CHUNK_TYPES))
           .optional()
-          .describe('Filter by chunk types: glossary, use-case, guide'),
+          .describe(
+            'Filter by chunk types: overview, endpoint, schema, glossary, use-case, guide',
+          ),
       },
     },
     async ({ query, types }) => {

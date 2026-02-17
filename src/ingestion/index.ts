@@ -40,27 +40,15 @@ function formatResult(r: IngestResult): string {
   return `  ${r.total} chunks: ${r.embedded} embedded, ${r.skipped} skipped, ${r.deleted} deleted`;
 }
 
-export async function ingestApi(
+async function ingestChunks(
   name: string,
-  specPath: string,
-  docsPath?: string,
+  chunks: Chunk[],
+  api: Api,
 ): Promise<IngestResult> {
-  const id = apiId(name);
   const db = getDb(undefined, getDimension());
 
-  // Parse spec + docs → collect all chunks
-  const chunks: Chunk[] = [];
-  chunks.push(...(await parseOpenApiSpec(specPath, id)));
-
-  if (docsPath && existsSync(docsPath)) {
-    const files = readdirSync(docsPath).filter((f) => f.endsWith('.md'));
-    for (const file of files) {
-      chunks.push(...(await parseMarkdownFile(join(docsPath, file), id)));
-    }
-  }
-
   // Incremental re-indexing — compare content hashes
-  const existingChunks = getChunksByApi(db, id);
+  const existingChunks = getChunksByApi(db, api.id);
   const existingHashMap = new Map(
     existingChunks.map((c) => [c.id, c.contentHash]),
   );
@@ -81,12 +69,6 @@ export async function ingestApi(
   const embeddings = await embedDocuments(changedChunks.map((c) => c.content));
 
   // Atomic write: API registry + chunk upserts + orphan cleanup
-  const api: Api = {
-    id,
-    name,
-    specPath: resolve(specPath),
-    docsPath: docsPath ? resolve(docsPath) : undefined,
-  };
   const currentIds = new Set(chunks.map((c) => c.id));
   const orphans = existingChunks.filter((c) => !currentIds.has(c.id));
 
@@ -110,70 +92,58 @@ export async function ingestApi(
   };
 }
 
+async function parseMarkdownDir(dirPath: string, id: string): Promise<Chunk[]> {
+  const chunks: Chunk[] = [];
+  if (existsSync(dirPath)) {
+    const files = readdirSync(dirPath).filter((f) => f.endsWith('.md'));
+    for (const file of files) {
+      chunks.push(...(await parseMarkdownFile(join(dirPath, file), id)));
+    }
+  }
+  return chunks;
+}
+
+export async function ingestApi(
+  name: string,
+  specPath: string,
+  docsPath?: string,
+): Promise<IngestResult> {
+  const id = apiId(name);
+
+  const chunks: Chunk[] = [];
+  chunks.push(...(await parseOpenApiSpec(specPath, id)));
+  if (docsPath) {
+    chunks.push(...(await parseMarkdownDir(docsPath, id)));
+  }
+
+  const api: Api = {
+    id,
+    name,
+    specPath: resolve(specPath),
+    docsPath: docsPath ? resolve(docsPath) : undefined,
+  };
+
+  return ingestChunks(name, chunks, api);
+}
+
 export async function ingestDocs(
   name: string,
   docsPath: string,
 ): Promise<IngestResult> {
+  if (!existsSync(docsPath)) {
+    throw new Error(`docs path does not exist: ${docsPath}`);
+  }
+
   const id = apiId(name);
-  const db = getDb(undefined, getDimension());
+  const chunks = await parseMarkdownDir(docsPath, id);
 
-  // Parse docs → collect all chunks (no OpenAPI spec)
-  const chunks: Chunk[] = [];
-  if (existsSync(docsPath)) {
-    const files = readdirSync(docsPath).filter((f) => f.endsWith('.md'));
-    for (const file of files) {
-      chunks.push(...(await parseMarkdownFile(join(docsPath, file), id)));
-    }
-  }
-
-  // Incremental re-indexing — compare content hashes
-  const existingChunks = getChunksByApi(db, id);
-  const existingHashMap = new Map(
-    existingChunks.map((c) => [c.id, c.contentHash]),
-  );
-
-  const changedChunks: Chunk[] = [];
-  let skipped = 0;
-
-  for (const chunk of chunks) {
-    const existingHash = existingHashMap.get(chunk.id);
-    if (existingHash === chunk.contentHash) {
-      skipped++;
-    } else {
-      changedChunks.push(chunk);
-    }
-  }
-
-  // Batch embed changed chunks (before any DB writes for atomicity)
-  const embeddings = await embedDocuments(changedChunks.map((c) => c.content));
-
-  // Atomic write: API registry + chunk upserts + orphan cleanup
   const api: Api = {
     id,
     name,
     docsPath: resolve(docsPath),
   };
-  const currentIds = new Set(chunks.map((c) => c.id));
-  const orphans = existingChunks.filter((c) => !currentIds.has(c.id));
 
-  const writeAll = db.transaction(() => {
-    upsertApi(db, api);
-    for (let i = 0; i < changedChunks.length; i++) {
-      upsertChunk(db, changedChunks[i], embeddings[i]);
-    }
-    for (const orphan of orphans) {
-      deleteChunk(db, orphan.id);
-    }
-  });
-  writeAll();
-
-  return {
-    api: name,
-    total: chunks.length,
-    embedded: changedChunks.length,
-    skipped,
-    deleted: orphans.length,
-  };
+  return ingestChunks(name, chunks, api);
 }
 
 export interface CliOptions {
@@ -197,11 +167,13 @@ export async function runCli(opts: CliOptions): Promise<void> {
       const results: IngestResult[] = [];
       let failed = 0;
 
-      // Process API entries
-      for (const entry of registry.apis) {
-        console.log(`Ingesting ${entry.name}...`);
+      async function processEntry(
+        name: string,
+        ingest: () => Promise<IngestResult>,
+      ) {
+        console.log(`Ingesting ${name}...`);
         try {
-          const result = await ingestApi(entry.name, entry.spec, entry.docs);
+          const result = await ingest();
           results.push(result);
           console.log(formatResult(result));
         } catch (error) {
@@ -215,36 +187,23 @@ export async function runCli(opts: CliOptions): Promise<void> {
 
           failed++;
           const msg = error instanceof Error ? error.message : String(error);
-          console.error(`  Error ingesting ${entry.name}: ${msg}`);
+          console.error(`  Error ingesting ${name}: ${msg}`);
           if (error instanceof Error && error.stack) {
             console.error(error.stack);
           }
         }
       }
 
-      // Process docs entries
-      for (const entry of registry.docs) {
-        console.log(`Ingesting ${entry.name}...`);
-        try {
-          const result = await ingestDocs(entry.name, entry.path);
-          results.push(result);
-          console.log(formatResult(result));
-        } catch (error) {
-          if (error instanceof TypeError || error instanceof RangeError)
-            throw error;
-          if (
-            error instanceof Error &&
-            /SQLITE_(CORRUPT|READONLY|FULL|IOERR)/.test(error.message)
-          )
-            throw error;
+      for (const entry of registry.apis) {
+        await processEntry(entry.name, () =>
+          ingestApi(entry.name, entry.spec, entry.docs),
+        );
+      }
 
-          failed++;
-          const msg = error instanceof Error ? error.message : String(error);
-          console.error(`  Error ingesting ${entry.name}: ${msg}`);
-          if (error instanceof Error && error.stack) {
-            console.error(error.stack);
-          }
-        }
+      for (const entry of registry.docs) {
+        await processEntry(entry.name, () =>
+          ingestDocs(entry.name, entry.path),
+        );
       }
 
       const entryCount = results.length;

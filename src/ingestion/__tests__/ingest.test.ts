@@ -401,6 +401,39 @@ describe('ingestDocs', () => {
     expect(apis[0].docsPath).toContain('fixtures');
   });
 
+  it('throws when docsPath does not exist', async () => {
+    await expect(ingestDocs('arch', '/nonexistent/docs')).rejects.toThrow(
+      'docs path does not exist: /nonexistent/docs',
+    );
+  });
+
+  it('deletes orphaned chunks when docs files are removed', async () => {
+    let docIdx = 0;
+    vi.mocked(parseMarkdownFile).mockImplementation(async (_path, apiId) => [
+      makeChunk(`doc${docIdx++}`, apiId, { type: 'guide' }),
+    ]);
+
+    await ingestDocs('arch', FIXTURES_DIR);
+
+    const apis = getApis(db);
+    const apiId = apis[0].id;
+    expect(getChunksByApi(db, apiId)).toHaveLength(2);
+
+    // Re-ingest returning only first chunk — second should be orphaned
+    const dbChunks = getChunksByApi(db, apiId);
+    vi.mocked(parseMarkdownFile).mockReset();
+    let callCount = 0;
+    vi.mocked(parseMarkdownFile).mockImplementation(async () => {
+      if (callCount++ === 0) return [{ ...dbChunks[0] }];
+      return [];
+    });
+
+    const result = await ingestDocs('arch', FIXTURES_DIR);
+
+    expect(result.deleted).toBe(1);
+    expect(getChunksByApi(db, apiId)).toHaveLength(1);
+  });
+
   it('applies incremental re-indexing to docs entries', async () => {
     let docIdx = 0;
     vi.mocked(parseMarkdownFile).mockImplementation(async (_path, apiId) => [

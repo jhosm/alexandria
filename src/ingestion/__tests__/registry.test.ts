@@ -181,6 +181,21 @@ docs:
     expect(result.docs[0].path).toBe(resolve(TMP_DIR, '../docs/arch'));
   });
 
+  it('throws on duplicate name within apis section', () => {
+    const path = writeYaml(
+      'dup-apis.yml',
+      `apis:
+  - name: petstore
+    spec: ./a.yaml
+  - name: petstore
+    spec: ./b.yaml
+`,
+    );
+    expect(() => loadRegistry(path)).toThrow(
+      'duplicate name "petstore" within apis section',
+    );
+  });
+
   it('throws on duplicate name across apis and docs sections', () => {
     const path = writeYaml(
       'dup-cross.yml',
