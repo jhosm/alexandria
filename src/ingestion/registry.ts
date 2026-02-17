@@ -82,6 +82,11 @@ export function loadRegistry(registryPath: string): RegistryResult {
   // Validate name uniqueness across both sections
   const allNames = new Map<string, string>();
   for (const a of apis) {
+    if (allNames.has(a.name)) {
+      throw new Error(
+        `apis.yml: duplicate name "${a.name}" within apis section`,
+      );
+    }
     allNames.set(a.name, 'apis');
   }
   for (const d of docs) {

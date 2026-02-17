@@ -343,6 +343,45 @@ describe('runCli', () => {
     }
   });
 
+  it('--all handles per-docs-entry errors and sets exitCode 1', async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'alexandria-runcli-'));
+    const origCwd = process.cwd();
+    try {
+      const fixtures = import.meta.dirname + '/fixtures';
+      writeFileSync(
+        join(tmpDir, 'apis.yml'),
+        `docs:\n  - name: good\n    path: ${fixtures}\n  - name: bad\n    path: ./nonexistent-dir\n`,
+      );
+
+      let docIdx = 0;
+      vi.mocked(parseMarkdownFile).mockImplementation(async (_path, apiId) => [
+        makeChunk(`d${docIdx++}`, apiId),
+      ]);
+
+      process.chdir(tmpDir);
+      await runCli({ all: true });
+
+      // Good docs entry succeeds
+      expect(logSpy).toHaveBeenCalledWith('Ingesting good...');
+      // Bad docs entry fails but doesn't stop
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Error ingesting bad'),
+      );
+      // Summary includes failure
+      const summaryCalls = logSpy.mock.calls.map((c) => c[0]);
+      expect(
+        summaryCalls.some(
+          (s: string) =>
+            s.includes('1 entry processed') && s.includes('1 failed'),
+        ),
+      ).toBe(true);
+      expect(process.exitCode).toBe(1);
+    } finally {
+      process.chdir(origCwd);
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it('--all re-throws unrecoverable errors', async () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'alexandria-runcli-'));
     const origCwd = process.cwd();
