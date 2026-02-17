@@ -30,7 +30,7 @@ src/
   server/
     index.ts               — MCP server over stdio (StdioServerTransport)
     format.ts              — Response formatters (API list, search results, endpoints)
-    tools/                 — list-apis, search-api-docs, search-arch-docs, get-api-endpoints
+    tools/                 — list-apis, search-api-docs, search-docs, get-api-endpoints
 apis.yml                   — Registry (apis: name/spec/docs, docs: name/path)
 alexandria.db              — SQLite database (gitignored)
 ```

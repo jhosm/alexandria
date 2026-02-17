@@ -7,7 +7,7 @@ import { upsertApi, upsertChunk } from '../../db/queries.js';
 import { registerListApis } from '../tools/list-apis.js';
 import { registerSearchApiDocs } from '../tools/search-api-docs.js';
 import { registerGetApiEndpoints } from '../tools/get-api-endpoints.js';
-import { registerSearchArchDocs } from '../tools/search-arch-docs.js';
+import { registerSearchDocs } from '../tools/search-docs.js';
 import type Database from 'better-sqlite3';
 
 const DIM = 3;
@@ -31,10 +31,12 @@ function seed(database: Database.Database) {
     id: 'api-1',
     name: 'petstore',
     version: '1.0.0',
+    specPath: '/fake/petstore.yml',
   });
   upsertApi(database, {
     id: 'api-2',
     name: 'payments',
+    specPath: '/fake/payments.yml',
   });
 
   upsertChunk(
@@ -121,7 +123,7 @@ beforeAll(async () => {
   registerListApis(mcpServer, db);
   registerSearchApiDocs(mcpServer, db);
   registerGetApiEndpoints(mcpServer, db);
-  registerSearchArchDocs(mcpServer, db);
+  registerSearchDocs(mcpServer, db);
 
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
@@ -144,7 +146,7 @@ describe('MCP server integration', () => {
       'get-api-endpoints',
       'list-apis',
       'search-api-docs',
-      'search-arch-docs',
+      'search-docs',
     ]);
   });
 
@@ -254,11 +256,11 @@ describe('MCP server integration', () => {
     expect(text).toContain('No endpoints found for "payments"');
   });
 
-  it('4.5 — search-arch-docs returns architecture results', async () => {
+  it('4.5 — search-docs returns architecture results by name', async () => {
     const text = textContent(
       await client.callTool({
-        name: 'search-arch-docs',
-        arguments: { query: 'how to expose an endpoint' },
+        name: 'search-docs',
+        arguments: { query: 'how to expose an endpoint', name: 'arch' },
       }),
     );
 
@@ -266,11 +268,11 @@ describe('MCP server integration', () => {
     expect(text).toContain('arch');
   });
 
-  it('4.5b — search-arch-docs filters by chunk types', async () => {
+  it('4.5b — search-docs filters by chunk types', async () => {
     const text = textContent(
       await client.callTool({
-        name: 'search-arch-docs',
-        arguments: { query: 'architecture', types: ['guide'] },
+        name: 'search-docs',
+        arguments: { query: 'architecture', name: 'arch', types: ['guide'] },
       }),
     );
 
@@ -278,35 +280,55 @@ describe('MCP server integration', () => {
     expect(text).not.toContain('Service mesh');
   });
 
-  it('4.5c — search-arch-docs returns error when arch not indexed', async () => {
+  it('4.5c — search-docs returns error when no docs indexed', async () => {
     const emptyDb = createTestDb(DIM);
     const emptyServer = new McpServer({
-      name: 'alexandria-no-arch',
+      name: 'alexandria-no-docs',
       version: '0.1.0',
     });
-    registerSearchArchDocs(emptyServer, emptyDb);
+    registerSearchDocs(emptyServer, emptyDb);
 
     const [ct, st] = InMemoryTransport.createLinkedPair();
     const emptyClient = new Client({
-      name: 'no-arch-test',
+      name: 'no-docs-test',
       version: '1.0.0',
     });
     await emptyServer.connect(st);
     await emptyClient.connect(ct);
 
     const result = await emptyClient.callTool({
-      name: 'search-arch-docs',
+      name: 'search-docs',
       arguments: { query: 'anything' },
     });
 
-    expect(textContent(result)).toContain(
-      'Architecture documentation not indexed',
-    );
+    expect(textContent(result)).toContain('No documentation indexed');
     expect(result.isError).toBe(true);
 
     await emptyClient.close();
     await emptyServer.close();
     emptyDb.close();
+  });
+
+  it('4.5c2 — search-docs returns error for unknown doc source name', async () => {
+    const result = await client.callTool({
+      name: 'search-docs',
+      arguments: { query: 'anything', name: 'nonexistent' },
+    });
+
+    expect(textContent(result)).toContain('Doc source "nonexistent" not found');
+    expect(result.isError).toBe(true);
+  });
+
+  it('4.5c3 — search-docs searches all doc sources when no name given', async () => {
+    const text = textContent(
+      await client.callTool({
+        name: 'search-docs',
+        arguments: { query: 'architecture endpoint' },
+      }),
+    );
+
+    expect(text).toContain('Search Results');
+    expect(text).toContain('arch');
   });
 
   it('4.3f — search-api-docs returns error when embedQuery throws', async () => {
@@ -335,12 +357,12 @@ describe('MCP server integration', () => {
     expect(result.isError).toBe(true);
   });
 
-  it('4.5d — search-arch-docs returns error when embedQuery throws', async () => {
+  it('4.5d — search-docs returns error when embedQuery throws', async () => {
     const { embedQuery } = await import('../../ingestion/embedder.js');
     vi.mocked(embedQuery).mockRejectedValueOnce(new Error('Embedding failed'));
 
     const result = await client.callTool({
-      name: 'search-arch-docs',
+      name: 'search-docs',
       arguments: { query: 'test' },
     });
 
@@ -348,12 +370,12 @@ describe('MCP server integration', () => {
     expect(result.isError).toBe(true);
   });
 
-  it('4.5e — search-arch-docs handles non-Error throw', async () => {
+  it('4.5e — search-docs handles non-Error throw', async () => {
     const { embedQuery } = await import('../../ingestion/embedder.js');
     vi.mocked(embedQuery).mockRejectedValueOnce('raw string error');
 
     const result = await client.callTool({
-      name: 'search-arch-docs',
+      name: 'search-docs',
       arguments: { query: 'test' },
     });
 

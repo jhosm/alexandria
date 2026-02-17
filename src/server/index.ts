@@ -6,7 +6,7 @@ import { getDimension } from '../ingestion/embedder.js';
 import { registerListApis } from './tools/list-apis.js';
 import { registerSearchApiDocs } from './tools/search-api-docs.js';
 import { registerGetApiEndpoints } from './tools/get-api-endpoints.js';
-import { registerSearchArchDocs } from './tools/search-arch-docs.js';
+import { registerSearchDocs } from './tools/search-docs.js';
 
 const server = new McpServer({
   name: 'alexandria',
@@ -25,7 +25,7 @@ try {
 registerListApis(server, db);
 registerSearchApiDocs(server, db);
 registerGetApiEndpoints(server, db);
-registerSearchArchDocs(server, db);
+registerSearchDocs(server, db);
 
 try {
   const transport = new StdioServerTransport();

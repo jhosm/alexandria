@@ -73,12 +73,12 @@ The server reads `alexandria.db` and exposes search tools over stdio. Connect an
 
 Once connected, the MCP server provides these tools to your AI assistant:
 
-| Tool                | Description                                                    |
-| ------------------- | -------------------------------------------------------------- |
-| `list-apis`         | List all indexed APIs and documentation collections            |
-| `search-api-docs`   | Search API documentation — endpoints, schemas, behaviour       |
-| `search-arch-docs`  | Search architecture documentation — concepts, patterns, guides |
-| `get-api-endpoints` | List all endpoints for a specific API                          |
+| Tool                | Description                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `list-apis`         | List all indexed APIs and documentation collections                                        |
+| `search-api-docs`   | Search API documentation — endpoints, schemas, behaviour                                   |
+| `search-docs`       | Search standalone documentation — architecture, guides, conventions (optional name filter) |
+| `get-api-endpoints` | List all endpoints for a specific API                                                      |
 
 Search combines vector similarity and full-text matching (hybrid search) for accurate results across both natural-language queries and exact terms.
 
@@ -100,6 +100,7 @@ Search combines vector similarity and full-text matching (hybrid search) for acc
 ## Further reading
 
 - **[Ingestion Guide](docs/ingestion.md)** — Index your own docs, configure the registry, choose embedding providers
+- **[Embedding Models](docs/embedding-models.md)** — Provider comparison, model configuration, Transformers.js dtype/local-model options
 - **[MCP Client Setup](docs/mcp-clients.md)** — Connect Alexandria to Claude Desktop, Claude Code, or VS Code
 - **[Troubleshooting](docs/troubleshooting.md)** — Native dependencies and build issues
 

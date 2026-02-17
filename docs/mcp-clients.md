@@ -12,12 +12,12 @@ The server does not index or modify the database. It only reads. If you need to 
 
 ## Available tools
 
-| Tool                | Description                                                    |
-| ------------------- | -------------------------------------------------------------- |
-| `list-apis`         | List all indexed APIs and documentation collections            |
-| `search-api-docs`   | Search API documentation — endpoints, schemas, behaviour       |
-| `search-arch-docs`  | Search architecture documentation — concepts, patterns, guides |
-| `get-api-endpoints` | List all endpoints for a specific API                          |
+| Tool                | Description                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `list-apis`         | List all indexed APIs and documentation collections                                        |
+| `search-api-docs`   | Search API documentation — endpoints, schemas, behaviour                                   |
+| `search-docs`       | Search standalone documentation — architecture, guides, conventions (optional name filter) |
+| `get-api-endpoints` | List all endpoints for a specific API                                                      |
 
 ## Claude Desktop (one-click install)
 

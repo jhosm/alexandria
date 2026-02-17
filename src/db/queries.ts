@@ -225,7 +225,7 @@ function searchFts(
   db: Database.Database,
   query: string,
   limit: number,
-  apiId?: string,
+  apiIds?: string[],
   types?: ChunkType[],
 ): Array<{ chunkId: string; rank: number }> {
   const sanitized = sanitizeFtsQuery(query);
@@ -238,16 +238,20 @@ function searchFts(
   const params: unknown[] = [];
 
   // Join with chunks table if we need filtering
-  if (apiId || types?.length) {
+  if (apiIds?.length || types?.length) {
     sql += ' JOIN chunks c ON c.id = f.chunk_id';
   }
 
   sql += ' WHERE chunks_fts MATCH ?';
   params.push(sanitized);
 
-  if (apiId) {
+  if (apiIds?.length === 1) {
     sql += ' AND c.api_id = ?';
-    params.push(apiId);
+    params.push(apiIds[0]);
+  } else if (apiIds && apiIds.length > 1) {
+    const placeholders = apiIds.map(() => '?').join(',');
+    sql += ` AND c.api_id IN (${placeholders})`;
+    params.push(...apiIds);
   }
   if (types?.length) {
     const placeholders = types.map(() => '?').join(',');
@@ -266,11 +270,11 @@ function searchVec(
   db: Database.Database,
   queryEmbedding: Float32Array,
   limit: number,
-  apiId?: string,
+  apiIds?: string[],
   types?: ChunkType[],
 ): Array<{ chunkId: string; distance: number }> {
-  // sqlite-vec KNN query — post-filter for apiId/types
-  const overFetch = apiId || types?.length ? limit * 5 : limit;
+  // sqlite-vec KNN query — post-filter for apiIds/types
+  const overFetch = apiIds?.length || types?.length ? limit * 5 : limit;
   const vecRows = db
     .prepare(
       `
@@ -289,16 +293,20 @@ function searchVec(
   }));
 
   // Post-filter if needed
-  if (apiId || types?.length) {
+  if (apiIds?.length || types?.length) {
     const chunkIds = results.map((r) => r.chunkId);
     if (chunkIds.length === 0) return [];
     const placeholders = chunkIds.map(() => '?').join(',');
     let filterSql = `SELECT id FROM chunks WHERE id IN (${placeholders})`;
     const filterParams: unknown[] = [...chunkIds];
 
-    if (apiId) {
+    if (apiIds?.length === 1) {
       filterSql += ' AND api_id = ?';
-      filterParams.push(apiId);
+      filterParams.push(apiIds[0]);
+    } else if (apiIds && apiIds.length > 1) {
+      const idPlaceholders = apiIds.map(() => '?').join(',');
+      filterSql += ` AND api_id IN (${idPlaceholders})`;
+      filterParams.push(...apiIds);
     }
     if (types?.length) {
       const typePlaceholders = types.map(() => '?').join(',');
@@ -328,18 +336,24 @@ export function searchHybrid(
   const limit = options.limit ?? 20;
   const overFetchLimit = limit * 3;
 
+  // Resolve apiId / apiIds into a single array
+  const effectiveApiIds: string[] = [];
+  if (options.apiId) effectiveApiIds.push(options.apiId);
+  if (options.apiIds) effectiveApiIds.push(...options.apiIds);
+  const apiIds = effectiveApiIds.length > 0 ? effectiveApiIds : undefined;
+
   const ftsResults = searchFts(
     db,
     query,
     overFetchLimit,
-    options.apiId,
+    apiIds,
     options.types,
   );
   const vecResults = searchVec(
     db,
     queryEmbedding,
     overFetchLimit,
-    options.apiId,
+    apiIds,
     options.types,
   );
 

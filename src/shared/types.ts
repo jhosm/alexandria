@@ -38,6 +38,7 @@ export interface Api {
 
 export interface SearchOptions {
   apiId?: string;
+  apiIds?: string[];
   types?: ChunkType[];
   limit?: number;
 }
