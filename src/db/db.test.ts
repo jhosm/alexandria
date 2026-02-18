@@ -386,6 +386,65 @@ describe('Hybrid search', () => {
     expect(results.every((r) => r.chunk.apiId === 'api-payments')).toBe(true);
   });
 
+  it('should filter by multiple apiIds', () => {
+    upsertApi(db, { id: 'api-docs-a', name: 'Docs A' });
+    upsertApi(db, { id: 'api-docs-b', name: 'Docs B' });
+
+    upsertChunk(
+      db,
+      makeChunk('chunk-pay-m', { apiId: 'api-payments' }),
+      makeEmbedding(1),
+    );
+    upsertChunk(
+      db,
+      makeChunk('chunk-a', { apiId: 'api-docs-a' }),
+      makeEmbedding(2),
+    );
+    upsertChunk(
+      db,
+      makeChunk('chunk-b', { apiId: 'api-docs-b' }),
+      makeEmbedding(3),
+    );
+    upsertChunk(
+      db,
+      makeChunk('chunk-user-m', { apiId: 'api-users' }),
+      makeEmbedding(4),
+    );
+
+    const results = searchHybrid(db, 'test chunk', makeEmbedding(2), {
+      apiIds: ['api-docs-a', 'api-docs-b'],
+    });
+    const returnedApiIds = new Set(results.map((r) => r.chunk.apiId));
+    expect(returnedApiIds.has('api-payments')).toBe(false);
+    expect(returnedApiIds.has('api-users')).toBe(false);
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  it('should merge apiId and apiIds', () => {
+    upsertChunk(
+      db,
+      makeChunk('chunk-pay-x', { apiId: 'api-payments' }),
+      makeEmbedding(1),
+    );
+    upsertChunk(
+      db,
+      makeChunk('chunk-user-x', { apiId: 'api-users' }),
+      makeEmbedding(2),
+    );
+
+    const results = searchHybrid(db, 'test chunk', makeEmbedding(1), {
+      apiId: 'api-payments',
+      apiIds: ['api-users'],
+    });
+    const returnedApiIds = new Set(results.map((r) => r.chunk.apiId));
+    expect(
+      [...returnedApiIds].every(
+        (id) => id === 'api-payments' || id === 'api-users',
+      ),
+    ).toBe(true);
+    expect(results.length).toBeGreaterThan(0);
+  });
+
   it('should filter by chunk types', () => {
     upsertChunk(
       db,

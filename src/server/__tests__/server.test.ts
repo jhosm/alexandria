@@ -113,6 +113,26 @@ function seed(database: Database.Database) {
     },
     new Float32Array([0.5, 0.6, 0.7]),
   );
+
+  // Second doc source (no spec) for cross-source testing
+  upsertApi(database, {
+    id: 'guides-1',
+    name: 'guides',
+  });
+
+  upsertChunk(
+    database,
+    {
+      id: 'guides-c1',
+      apiId: 'guides-1',
+      type: 'guide',
+      title: 'Getting started guide',
+      content:
+        'A getting started guide for new developers joining the project.',
+      contentHash: 'gh1',
+    },
+    new Float32Array([0.6, 0.7, 0.8]),
+  );
 }
 
 beforeAll(async () => {
@@ -315,7 +335,9 @@ describe('MCP server integration', () => {
       arguments: { query: 'anything', name: 'nonexistent' },
     });
 
-    expect(textContent(result)).toContain('Doc source "nonexistent" not found');
+    const text = textContent(result);
+    expect(text).toContain('Doc source "nonexistent" not found');
+    expect(text).toContain('Available: arch, guides');
     expect(result.isError).toBe(true);
   });
 
@@ -323,12 +345,24 @@ describe('MCP server integration', () => {
     const text = textContent(
       await client.callTool({
         name: 'search-docs',
-        arguments: { query: 'architecture endpoint' },
+        arguments: { query: 'guide' },
       }),
     );
 
     expect(text).toContain('Search Results');
+    // Results should include chunks from both doc sources
     expect(text).toContain('arch');
+    expect(text).toContain('guides');
+  });
+
+  it('4.5c4 — search-docs does not treat APIs as doc sources', async () => {
+    const result = await client.callTool({
+      name: 'search-docs',
+      arguments: { query: 'anything', name: 'petstore' },
+    });
+
+    expect(textContent(result)).toContain('Doc source "petstore" not found');
+    expect(result.isError).toBe(true);
   });
 
   it('4.3f — search-api-docs returns error when embedQuery throws', async () => {

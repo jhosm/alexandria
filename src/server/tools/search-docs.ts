@@ -37,6 +37,17 @@ export function registerSearchDocs(server: McpServer, db: Database.Database) {
 
         let apiIds: string[];
         if (name) {
+          if (docSources.length === 0) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: 'No documentation indexed. Run ingestion first.',
+                },
+              ],
+              isError: true,
+            };
+          }
           const source = docSources.find((a) => a.name === name);
           if (!source) {
             const available = docSources.map((d) => d.name).join(', ');
@@ -44,7 +55,7 @@ export function registerSearchDocs(server: McpServer, db: Database.Database) {
               content: [
                 {
                   type: 'text',
-                  text: `Doc source "${name}" not found. Available: ${available || 'none'}`,
+                  text: `Doc source "${name}" not found. Available: ${available}`,
                 },
               ],
               isError: true,
