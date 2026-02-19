@@ -58,6 +58,13 @@ function initDb(db: Database.Database, dimension: number = 1024): void {
     // Column already exists — ignore
   }
 
+  // Migration: add spec_content column to apis table
+  try {
+    db.exec('ALTER TABLE apis ADD COLUMN spec_content TEXT');
+  } catch {
+    // Column already exists — ignore
+  }
+
   const stored = db
     .prepare("SELECT value FROM config WHERE key = 'embedding_dimension'")
     .get() as { value: string } | undefined;
