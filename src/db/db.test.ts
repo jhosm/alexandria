@@ -4,6 +4,7 @@ import { createTestDb } from './index.js';
 import {
   upsertApi,
   getApis,
+  getApiSpecContent,
   upsertChunk,
   deleteChunk,
   deleteChunksByApi,
@@ -102,6 +103,24 @@ describe('API CRUD', () => {
     const apis = getApis(db);
     expect(apis).toHaveLength(1);
     expect(apis[0].version).toBe('3.0');
+  });
+
+  it('should round-trip specContent through upsert and get', () => {
+    const specYaml = 'openapi: 3.0.0\ninfo:\n  title: Test\n  version: 1.0';
+    upsertApi(db, { ...testApi, specContent: specYaml });
+    const apis = getApis(db);
+    expect(apis[0].specContent).toBe(specYaml);
+  });
+
+  it('should retrieve specContent via getApiSpecContent', () => {
+    const specYaml = 'openapi: 3.0.0\ninfo:\n  title: Test\n  version: 1.0';
+    upsertApi(db, { ...testApi, specContent: specYaml });
+    expect(getApiSpecContent(db, testApi.name)).toBe(specYaml);
+  });
+
+  it('should return undefined from getApiSpecContent when no spec stored', () => {
+    upsertApi(db, { ...testApi, specContent: undefined });
+    expect(getApiSpecContent(db, testApi.name)).toBeUndefined();
   });
 });
 

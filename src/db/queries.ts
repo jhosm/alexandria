@@ -13,14 +13,15 @@ import {
 export function upsertApi(db: Database.Database, api: Api): void {
   db.prepare(
     `
-    INSERT INTO apis (id, name, version, spec_path, docs_path, source_hash)
-    VALUES (@id, @name, @version, @specPath, @docsPath, @sourceHash)
+    INSERT INTO apis (id, name, version, spec_path, docs_path, source_hash, spec_content)
+    VALUES (@id, @name, @version, @specPath, @docsPath, @sourceHash, @specContent)
     ON CONFLICT(id) DO UPDATE SET
       name = excluded.name,
       version = excluded.version,
       spec_path = excluded.spec_path,
       docs_path = excluded.docs_path,
       source_hash = excluded.source_hash,
+      spec_content = excluded.spec_content,
       updated_at = datetime('now')
   `,
   ).run({
@@ -30,6 +31,7 @@ export function upsertApi(db: Database.Database, api: Api): void {
     specPath: api.specPath ?? null,
     docsPath: api.docsPath ?? null,
     sourceHash: api.sourceHash ?? null,
+    specContent: api.specContent ?? null,
   });
 }
 
@@ -50,6 +52,7 @@ export function getApis(db: Database.Database): Api[] {
     version: string | null;
     spec_path: string | null;
     docs_path: string | null;
+    spec_content: string | null;
     created_at: string;
     updated_at: string;
   }>;
@@ -59,9 +62,20 @@ export function getApis(db: Database.Database): Api[] {
     version: r.version ?? undefined,
     specPath: r.spec_path ?? undefined,
     docsPath: r.docs_path ?? undefined,
+    specContent: r.spec_content ?? undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   }));
+}
+
+export function getApiSpecContent(
+  db: Database.Database,
+  apiName: string,
+): string | undefined {
+  const row = db
+    .prepare('SELECT spec_content FROM apis WHERE name = ?')
+    .get(apiName) as { spec_content: string | null } | undefined;
+  return row?.spec_content ?? undefined;
 }
 
 // --- Chunks ---

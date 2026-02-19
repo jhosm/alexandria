@@ -8,6 +8,7 @@ import { registerListApis } from '../tools/list-apis.js';
 import { registerSearchApiDocs } from '../tools/search-api-docs.js';
 import { registerGetApiEndpoints } from '../tools/get-api-endpoints.js';
 import { registerSearchDocs } from '../tools/search-docs.js';
+import { registerGetApiSpec } from '../tools/get-api-spec.js';
 import type Database from 'better-sqlite3';
 
 const DIM = 3;
@@ -32,6 +33,7 @@ function seed(database: Database.Database) {
     name: 'petstore',
     version: '1.0.0',
     specPath: '/fake/petstore.yml',
+    specContent: 'openapi: 3.0.0\ninfo:\n  title: Petstore\n  version: 1.0.0',
   });
   upsertApi(database, {
     id: 'api-2',
@@ -144,6 +146,7 @@ beforeAll(async () => {
   registerSearchApiDocs(mcpServer, db);
   registerGetApiEndpoints(mcpServer, db);
   registerSearchDocs(mcpServer, db);
+  registerGetApiSpec(mcpServer, db);
 
   const [clientTransport, serverTransport] =
     InMemoryTransport.createLinkedPair();
@@ -164,6 +167,7 @@ describe('MCP server integration', () => {
     const tools = await client.listTools();
     expect(tools.tools.map((t) => t.name).sort()).toEqual([
       'get-api-endpoints',
+      'get-api-spec',
       'list-apis',
       'search-api-docs',
       'search-docs',
@@ -362,6 +366,38 @@ describe('MCP server integration', () => {
     });
 
     expect(textContent(result)).toContain('Doc source "petstore" not found');
+    expect(result.isError).toBe(true);
+  });
+
+  it('4.6 — get-api-spec returns raw spec for known API', async () => {
+    const text = textContent(
+      await client.callTool({
+        name: 'get-api-spec',
+        arguments: { apiName: 'petstore' },
+      }),
+    );
+
+    expect(text).toContain('openapi: 3.0.0');
+    expect(text).toContain('Petstore');
+  });
+
+  it('4.6b — get-api-spec returns error for unknown API', async () => {
+    const result = await client.callTool({
+      name: 'get-api-spec',
+      arguments: { apiName: 'nonexistent' },
+    });
+
+    expect(textContent(result)).toContain('API "nonexistent" not found');
+    expect(result.isError).toBe(true);
+  });
+
+  it('4.6c — get-api-spec returns error for doc-only entry', async () => {
+    const result = await client.callTool({
+      name: 'get-api-spec',
+      arguments: { apiName: 'arch' },
+    });
+
+    expect(textContent(result)).toContain('No spec content stored for "arch"');
     expect(result.isError).toBe(true);
   });
 

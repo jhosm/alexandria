@@ -168,12 +168,15 @@ export async function ingestApi(
     chunks.push(...(await parseMarkdownDir(docsPath, id)));
   }
 
+  const specContent = readFileSync(specPath, 'utf-8');
+
   const api: Api = {
     id,
     name,
     specPath: resolve(specPath),
     docsPath: docsPath ? resolve(docsPath) : undefined,
     sourceHash,
+    specContent,
   };
 
   return ingestChunks(name, chunks, api);

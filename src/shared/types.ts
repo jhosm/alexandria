@@ -32,6 +32,7 @@ export interface Api {
   specPath?: string;
   docsPath?: string;
   sourceHash?: string;
+  specContent?: string;
   createdAt?: string;
   updatedAt?: string;
 }
