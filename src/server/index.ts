@@ -7,6 +7,7 @@ import { registerListApis } from './tools/list-apis.js';
 import { registerSearchApiDocs } from './tools/search-api-docs.js';
 import { registerGetApiEndpoints } from './tools/get-api-endpoints.js';
 import { registerSearchDocs } from './tools/search-docs.js';
+import { registerGetApiSpec } from './tools/get-api-spec.js';
 
 const server = new McpServer({
   name: 'alexandria',
@@ -26,6 +27,7 @@ registerListApis(server, db);
 registerSearchApiDocs(server, db);
 registerGetApiEndpoints(server, db);
 registerSearchDocs(server, db);
+registerGetApiSpec(server, db);
 
 try {
   const transport = new StdioServerTransport();
